@@ -1,0 +1,22 @@
+{
+  "name": "@unbox/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@unbox/shared": "*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.7"
+  }
+}
