@@ -98,6 +98,11 @@ pub fn router(state: AppState) -> Router {
     if state.cfg.dev_clock {
         api = api.route("/dev/clock", post(dev_clock));
     }
+    if state.cfg.payments == PaymentsMode::Solana {
+        api = api
+            .route("/webhooks/helius", post(solana::webhook::helius))
+            .route("/chain/sync/{address}", post(chain_sync));
+    }
     Router::new()
         .nest("/api", api)
         .route("/media/{sha256}", get(get_media))
@@ -259,6 +264,28 @@ async fn me(AuthUser(u): AuthUser) -> Res {
 }
 
 async fn my_wallet(State(s): State<AppState>, AuthUser(u): AuthUser) -> Res {
+    if let Some(chain) = s.chain.clone() {
+        // PAYMENTS=solana: the balance is the wallet's SOL; "held" is what sits in escrow for this buyer.
+        let balance = match &u.wallet_address {
+            Some(a) => {
+                let key = Pubkey::from_str(a).map_err(|_| ApiError::internal("Zapisany adres portfela jest niepoprawny"))?;
+                chain.balance(&key).await.map_err(|e| ApiError::upstream(format!("RPC: {e}")))?
+            }
+            None => 0,
+        };
+        let held_minor = db::doc_list::<Deal>(&s.conn(), "deal")?
+            .iter()
+            .filter(|d| d.buyer_id == u.id && d.payment.status == PaymentStatus::Secured)
+            .map(|d| d.payment.amount_minor)
+            .sum();
+        return ok(&Wallet {
+            balance_minor: balance as i64,
+            currency: "SOL".into(),
+            held_minor,
+            ledger: vec![],
+            address: u.wallet_address.clone(),
+        });
+    }
     deals::expire_due_for(&s, &u.id)?; // saldo zawsze po domknięciu transakcji, których termin minął
     ok(&wallet::wallet_of(&s.conn(), &u.id)?)
 }
@@ -740,6 +767,22 @@ async fn confirm_return(State(s): State<AppState>, AuthUser(u): AuthUser, Path(i
         &id,
         DealAction::ConfirmReturn { actor_id: u.id, return_qr_secret: i.return_qr_secret },
     )?)
+}
+
+/// The app calls this right after its transaction confirms, so the UI does not wait for the webhook.
+async fn chain_sync(State(s): State<AppState>, AuthUser(_u): AuthUser, Path(address): Path<String>) -> Res {
+    let key = Pubkey::from_str(&address).map_err(|_| ApiError::validation("Niepoprawny adres umowy"))?;
+    let listing_id = solana::indexer::known_addresses(&s)?
+        .remove(&address)
+        .ok_or_else(|| ApiError::not_found("Nie ma ogłoszenia z tym adresem umowy"))?;
+    solana::indexer::sync_addresses(&s, &[key]).await.map_err(|e| ApiError::upstream(format!("RPC: {e}")))?;
+    let conn = s.conn();
+    let listing = load_listing(&conn, &listing_id)?;
+    let deal: Option<Deal> = db::doc_get(&conn, "deal", &listing_id)?;
+    ok(&json!({
+        "listingId": listing_id, "listingStatus": listing.status,
+        "published": listing.onchain.map(|o| o.published), "dealStatus": deal.map(|d| d.status)
+    }))
 }
 
 /// „Odbierz środki” po terminie. Backend domyka też sam (odczyt i cykliczny sweep); to wymusza od razu.

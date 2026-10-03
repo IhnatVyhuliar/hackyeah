@@ -33,6 +33,7 @@ pub async fn build(cfg: config::Config) -> Result<(axum::Router, state::AppState
 pub fn spawn_background(state: &state::AppState) {
     if state.cfg.payments == config::PaymentsMode::Solana {
         // No sweep and no dispute analysis: deadlines and verdicts are enforced on-chain.
+        solana::indexer::spawn_poller(state);
         return;
     }
     disputes::resume_pending(state);

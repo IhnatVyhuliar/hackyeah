@@ -1,7 +1,9 @@
 //! PAYMENTS=solana: the money and the rules live in the `unbox_escrow` program. This module only reads
 //! accounts over RPC and mirrors them into SQLite; it never signs or sends a transaction.
 pub mod chain;
+pub mod indexer;
 pub mod mirror;
+pub mod webhook;
 
 use crate::config::{PaymentsMode, SolanaConfig};
 use crate::error::{ApiError, ApiResult};
