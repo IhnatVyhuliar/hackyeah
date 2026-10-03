@@ -103,5 +103,5 @@ pub fn wallet_of(c: &Connection, user: &str) -> ApiResult<Wallet> {
         .filter(|d| d.buyer_id == user && d.payment.status == PaymentStatus::Secured)
         .map(|d| d.payment.amount_minor)
         .sum();
-    Ok(Wallet { balance_minor: balance_of(c, user)?, currency: "PLN".into(), held_minor, ledger })
+    Ok(Wallet { balance_minor: balance_of(c, user)?, currency: "PLN".into(), held_minor, ledger, address: None })
 }

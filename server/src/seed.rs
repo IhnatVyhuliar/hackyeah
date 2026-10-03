@@ -13,7 +13,13 @@ pub const DEMO_PASSWORD: &str = "demo1234";
 pub const DEMO_START_BALANCE_MINOR: i64 = 100_000;
 
 pub async fn register_user(state: &AppState, id: &str, email: &str, name: &str, password: &str) -> ApiResult<User> {
-    let user = User { id: id.into(), email: email.to_lowercase(), name: name.into(), created_at: state.now() };
+    let user = User {
+        id: id.into(),
+        email: email.to_lowercase(),
+        name: name.into(),
+        created_at: state.now(),
+        wallet_address: None,
+    };
     let hash = hash_password(password.to_string()).await?;
     let now = state.now();
     let mut conn = state.conn();
@@ -65,6 +71,7 @@ fn listings(t: Unix) -> Vec<Listing> {
         status: ListingStatus::Listed,
         created_at: t,
         updated_at: t,
+        onchain: None,
     };
     vec![
         mk(

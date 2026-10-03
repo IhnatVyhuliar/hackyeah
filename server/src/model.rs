@@ -11,6 +11,9 @@ pub struct User {
     pub email: String,
     pub name: String,
     pub created_at: Unix,
+    /// Solana wallet (base58) linked by the app; PAYMENTS=solana maps on-chain parties to users with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wallet_address: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -68,6 +71,8 @@ pub struct Listing {
     pub status: ListingStatus,
     pub created_at: Unix,
     pub updated_at: Unix,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub onchain: Option<OnChainListing>,
 }
 
 /// Treść ogłoszenia zamrożona przy zakupie; `listingHash` = sha256(canonicalJson(ListingMetadata)).
@@ -272,6 +277,8 @@ pub struct Deal {
     pub close_reason: Option<CloseReason>,
     pub timeline: Vec<TimelineEvent>,
     pub created_at: Unix,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub onchain: Option<OnChainDeal>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -331,6 +338,8 @@ pub struct Wallet {
     pub currency: String,
     pub held_minor: i64,
     pub ledger: Vec<LedgerEntry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
 }
 
 /// Odpowiedź wyroczni: raport + metadane + hasze ocenionych plików. Bez werdyktu.
@@ -364,4 +373,39 @@ pub struct OracleRequest {
     pub packing_video: EvidenceFile,
     pub unboxing_video: EvidenceFile,
     pub complaint: Complaint,
+}
+
+/// A listing published to the unbox_escrow program (PAYMENTS=solana). From here on its content is frozen.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OnChainListing {
+    /// Deal PDA (base58) = ["deal", seller_wallet, deal_id.to_le_bytes()].
+    pub deal: String,
+    pub deal_id: u64,
+    pub seller_wallet: String,
+    /// sha256(canonicalJson(ListingMetadata)), the same bytes as served at `metadata_uri`.
+    pub listing_hash: String,
+    pub metadata_uri: String,
+    /// The Deal account exists on-chain with this hash (seen by the webhook or the poller).
+    pub published: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OnChainDeal {
+    pub deal: String,
+    pub seller_wallet: String,
+    pub buyer_wallet: String,
+    pub price_lamports: u64,
+    /// One entry per observed status change, with the Explorer link.
+    pub transactions: Vec<ChainTx>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChainTx {
+    pub status: DealStatus,
+    pub at: Unix,
+    pub signature: Option<String>,
+    pub explorer_url: Option<String>,
 }
