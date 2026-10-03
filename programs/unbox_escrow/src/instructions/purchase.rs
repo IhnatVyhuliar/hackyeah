@@ -18,7 +18,11 @@ pub struct Purchase<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handle_purchase(ctx: Context<Purchase>, expected_listing_hash: [u8; 32], expected_arbiter: Pubkey) -> Result<()> {
+pub fn handle_purchase(
+    ctx: Context<Purchase>,
+    expected_listing_hash: [u8; 32],
+    expected_arbiter: Pubkey,
+) -> Result<()> {
     let deal = &ctx.accounts.deal;
     require!(deal.status == DealStatus::Listed, UnboxError::InvalidStatus);
     require_keys_neq!(ctx.accounts.buyer.key(), deal.seller, UnboxError::SameParty);
