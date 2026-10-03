@@ -39,6 +39,9 @@ importers:
       '@google/genai':
         specifier: ^2.27.0
         version: 2.27.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      '@solana/web3.js':
+        specifier: 1.99.0
+        version: 1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       '@supabase/supabase-js':
         specifier: ^2.117.2
         version: 2.117.2
@@ -49,6 +52,9 @@ importers:
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
 
   packages/shared:
     dependencies:
@@ -1044,7 +1050,7 @@ packages:
 
 snapshots:
 
-  '@anchor-lang/borsh@1.2.0(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3))':
+  '@anchor-lang/borsh@1.2.0(@solana/web3.js@1.99.0(typescript@5.9.3))':
     dependencies:
       '@solana/web3.js': 1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
       bn.js: 5.2.5
@@ -1052,7 +1058,7 @@ snapshots:
 
   '@anchor-lang/core@1.1.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
     dependencies:
-      '@anchor-lang/borsh': 1.2.0(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3))
+      '@anchor-lang/borsh': 1.2.0(@solana/web3.js@1.99.0(typescript@5.9.3))
       '@anchor-lang/errors': 1.2.0
       '@noble/hashes': 1.8.0
       '@solana/web3.js': 1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -1613,7 +1619,7 @@ snapshots:
 
   ieee754@1.2.1: {}
 
-  isomorphic-ws@4.0.1(ws@7.5.13(bufferutil@4.1.0)):
+  isomorphic-ws@4.0.1(ws@7.5.13):
     dependencies:
       ws: 7.5.13(bufferutil@4.1.0)(utf-8-validate@6.0.6)
 
@@ -1626,7 +1632,7 @@ snapshots:
       delay: 5.0.0
       es6-promisify: 5.0.0
       eyes: 0.1.8
-      isomorphic-ws: 4.0.1(ws@7.5.13(bufferutil@4.1.0))
+      isomorphic-ws: 4.0.1(ws@7.5.13)
       json-stringify-safe: 5.0.1
       stream-json: 1.9.1
       uuid: 8.3.2
