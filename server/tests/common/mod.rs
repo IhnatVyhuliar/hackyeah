@@ -1,0 +1,313 @@
+//! Wspólna infrastruktura testów: backend jako osobny proces (binarka) na tymczasowej bazie i wolnym porcie,
+//! klient HTTP i pomocnicze przepływy sklepu.
+#![allow(dead_code)]
+
+use reqwest::{Method, StatusCode};
+use serde_json::{json, Value};
+use std::process::{Child, Command, Stdio};
+use std::time::{Duration, Instant};
+use unbox_server::machine;
+use unbox_server::model::Deal;
+
+pub const DEMO_START: i64 = 100_000;
+
+pub fn free_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+}
+
+pub struct Backend {
+    pub url: String,
+    pub dir: tempfile::TempDir,
+    env: Vec<(String, String)>,
+    child: Option<Child>,
+}
+
+impl Backend {
+    pub async fn start(extra: &[(&str, &str)]) -> Backend {
+        Self::try_start(extra).await.unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    pub async fn try_start(extra: &[(&str, &str)]) -> Result<Backend, String> {
+        let dir = tempfile::tempdir().unwrap();
+        let port = free_port();
+        let url = format!("http://127.0.0.1:{port}");
+        let mut env: Vec<(String, String)> = [
+            ("PORT", port.to_string()),
+            ("DATA_DIR", dir.path().to_string_lossy().to_string()),
+            ("AI", "mock".into()),
+            ("MOCK_AI_DELAY_MS", "50".into()),
+            ("AI_RETRY_MS", "50".into()),
+            ("AI_MAX_ATTEMPTS", "1".into()),
+            ("ENABLE_DEV_CLOCK", "1".into()),
+            ("NODE_ENV", "test".into()),
+            ("QUIET", "1".into()),
+            ("PUBLIC_BASE_URL", url.clone()),
+            ("SWEEP_MS", "60000".into()),
+            ("JWT_SECRET", String::new()),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+        for (k, v) in extra {
+            env.retain(|(ek, _)| ek != k);
+            env.push((k.to_string(), v.to_string()));
+        }
+        let mut b = Backend { url, dir, env, child: None };
+        b.boot().await?;
+        Ok(b)
+    }
+
+    async fn boot(&mut self) -> Result<(), String> {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_unbox-server"));
+        cmd.stdout(Stdio::null()).stderr(Stdio::piped());
+        for (k, v) in &self.env {
+            cmd.env(k, v);
+        }
+        let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+        let client = reqwest::Client::new();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            if let Ok(Some(status)) = child.try_wait() {
+                let mut err = String::new();
+                if let Some(mut e) = child.stderr.take() {
+                    use std::io::Read;
+                    let _ = e.read_to_string(&mut err);
+                }
+                return Err(format!("backend zakończył się ({status}): {err}"));
+            }
+            if client.get(format!("{}/api/health", self.url)).send().await.is_ok() {
+                self.child = Some(child);
+                return Ok(());
+            }
+            if Instant::now() > deadline {
+                let _ = child.kill();
+                return Err("backend nie wystartował w 20 s".into());
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
+    pub fn stop(&mut self) {
+        if let Some(mut c) = self.child.take() {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
+    }
+
+    pub async fn restart(&mut self) {
+        self.stop();
+        self.boot().await.unwrap();
+    }
+
+    pub async fn advance(&self, secs: i64) {
+        let r = reqwest::Client::new()
+            .post(format!("{}/api/dev/clock", self.url))
+            .json(&json!({ "advanceSecs": secs }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), StatusCode::OK, "dev clock");
+    }
+
+    pub fn anon(&self) -> Api {
+        Api { base: self.url.clone(), http: reqwest::Client::new(), token: None, id: String::new() }
+    }
+
+    pub async fn login(&self, email: &str) -> Api {
+        let mut a = self.anon();
+        let (s, v) =
+            a.call(Method::POST, "/api/auth/login", Some(json!({"email": email, "password": "demo1234"}))).await;
+        assert_eq!(s, StatusCode::OK, "login {email}: {v}");
+        a.token = Some(v["token"].as_str().unwrap().to_string());
+        a.id = v["user"]["id"].as_str().unwrap().to_string();
+        a
+    }
+}
+
+impl Drop for Backend {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+#[derive(Clone)]
+pub struct Api {
+    pub base: String,
+    pub http: reqwest::Client,
+    pub token: Option<String>,
+    pub id: String,
+}
+
+/// Wynik wywołania: status + JSON (Value::Null, gdy brak ciała).
+pub type Resp = (StatusCode, Value);
+
+impl Api {
+    pub async fn call(&self, method: Method, path: &str, body: Option<Value>) -> Resp {
+        let mut r = self.http.request(method, format!("{}{}", self.base, path));
+        if let Some(t) = &self.token {
+            r = r.bearer_auth(t);
+        }
+        if let Some(b) = body {
+            r = r.json(&b);
+        }
+        let res = r.send().await.unwrap();
+        let status = res.status();
+        let text = res.text().await.unwrap();
+        (status, serde_json::from_str(&text).unwrap_or(Value::Null))
+    }
+
+    pub async fn get(&self, path: &str) -> Resp {
+        self.call(Method::GET, path, None).await
+    }
+    pub async fn post(&self, path: &str, body: Value) -> Resp {
+        self.call(Method::POST, path, Some(body)).await
+    }
+
+    pub async fn upload_bytes(&self, bytes: Vec<u8>, mime: &str, name: &str) -> Resp {
+        let part = reqwest::multipart::Part::bytes(bytes).file_name(name.to_string()).mime_str(mime).unwrap();
+        let form = reqwest::multipart::Form::new().part("file", part);
+        let mut r = self.http.post(format!("{}/api/media", self.base)).multipart(form);
+        if let Some(t) = &self.token {
+            r = r.bearer_auth(t);
+        }
+        let res = r.send().await.unwrap();
+        let status = res.status();
+        (status, res.json().await.unwrap_or(Value::Null))
+    }
+
+    /// Wgrywa losowy plik i zwraca jego sha256.
+    pub async fn upload(&self, mime: &str) -> String {
+        let (s, v) = self.upload_bytes(random_bytes(8 * 1024), mime, "x").await;
+        assert_eq!(s, StatusCode::CREATED, "upload: {v}");
+        v["sha256"].as_str().unwrap().to_string()
+    }
+
+    pub async fn balance(&self) -> i64 {
+        self.wallet().await["balanceMinor"].as_i64().unwrap()
+    }
+    pub async fn wallet(&self) -> Value {
+        let (s, v) = self.get("/api/me/wallet").await;
+        assert_eq!(s, StatusCode::OK, "wallet: {v}");
+        v
+    }
+    pub async fn deal(&self, id: &str) -> Deal {
+        let (s, v) = self.get(&format!("/api/deals/{id}")).await;
+        assert_eq!(s, StatusCode::OK, "deal: {v}");
+        serde_json::from_value(v).expect("odpowiedź zgodna z typem Deal")
+    }
+    pub async fn deals(&self, role: &str) -> Vec<Deal> {
+        let (s, v) = self.get(&format!("/api/deals?role={role}")).await;
+        assert_eq!(s, StatusCode::OK);
+        serde_json::from_value(v).unwrap()
+    }
+}
+
+pub fn random_bytes(n: usize) -> Vec<u8> {
+    (0..n).map(|_| rand::random::<u8>()).collect()
+}
+
+pub fn code(r: &Resp) -> String {
+    r.1["error"]["code"].as_str().unwrap_or("").to_string()
+}
+
+/// Sprawdza status i kształt błędu `{ error: { code, message } }`.
+pub fn expect_error(r: &Resp, status: u16, error_code: &str) {
+    assert_eq!(r.0.as_u16(), status, "status (body: {})", r.1);
+    assert_eq!(code(r), error_code, "kod błędu (body: {})", r.1);
+    assert!(!r.1["error"]["message"].as_str().unwrap_or("").is_empty(), "komunikat błędu");
+}
+
+pub fn ok_code(r: &Resp) -> String {
+    if r.0.is_success() {
+        "OK".into()
+    } else {
+        code(r)
+    }
+}
+
+pub async fn listing(seller: &Api, price: i64) -> String {
+    let photo = seller.upload("image/jpeg").await;
+    let (s, v) = seller
+        .post(
+            "/api/listings",
+            json!({ "title": "Test", "description": "", "categoryId": "inne", "condition": "dobry", "brand": "X", "size": "M",
+                    "defects": [], "photos": [{ "url": "x", "sha256": photo }], "priceMinor": price }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::CREATED, "listing: {v}");
+    v["id"].as_str().unwrap().to_string()
+}
+
+pub async fn purchase(buyer: &Api, listing_id: &str) -> Deal {
+    let (s, v) = buyer.post(&format!("/api/listings/{listing_id}/purchase"), json!({})).await;
+    assert_eq!(s, StatusCode::CREATED, "purchase: {v}");
+    serde_json::from_value(v).unwrap()
+}
+
+/// Zakup + nadanie; zwraca transakcję (Shipped) i sekret QR z paczki.
+pub async fn shipped(seller: &Api, buyer: &Api, price: i64) -> (Deal, String) {
+    let l = listing(seller, price).await;
+    let deal = purchase(buyer, &l).await;
+    let secret = machine::new_qr_secret();
+    let video = seller.upload("video/mp4").await;
+    let (s, v) = seller
+        .post(
+            &format!("/api/deals/{}/ship", deal.id),
+            json!({ "qrCommitment": machine::ship_commitment(&deal.id, &secret).unwrap(),
+                    "packingVideoSha256": video, "trackingNumber": "INP1" }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::OK, "ship: {v}");
+    (serde_json::from_value(v).unwrap(), secret)
+}
+
+pub async fn accept(buyer: &Api, id: &str, secret: &str) -> Resp {
+    buyer.post(&format!("/api/deals/{id}/accept"), json!({ "qrSecret": secret })).await
+}
+
+pub async fn dispute(buyer: &Api, id: &str, secret: &str, description: &str, scenario: Option<&str>) -> Resp {
+    let video = buyer.upload("video/mp4").await;
+    let mut r =
+        buyer.http.post(format!("{}/api/deals/{id}/dispute", buyer.base)).bearer_auth(buyer.token.as_ref().unwrap());
+    if let Some(sc) = scenario {
+        r = r.header("X-Demo-Scenario", sc);
+    }
+    let res = r
+        .json(&json!({ "qrSecret": secret, "unboxingVideoSha256": video,
+                       "complaint": { "category": "damaged", "description": description } }))
+        .send()
+        .await
+        .unwrap();
+    (res.status(), res.json().await.unwrap_or(Value::Null))
+}
+
+pub async fn wait_deal(a: &Api, id: &str, until: impl Fn(&Deal) -> bool) -> Deal {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let d = a.deal(id).await;
+        if until(&d) {
+            return d;
+        }
+        assert!(Instant::now() < deadline, "nie doczekano się stanu transakcji {id}: {:?}", d.status);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// Zwrot: kupujący nadaje (nowy QR), zwraca sekret QR zwrotu.
+pub async fn mark_returned(buyer: &Api, id: &str) -> String {
+    let secret = machine::new_qr_secret();
+    let video = buyer.upload("video/mp4").await;
+    let (s, v) = buyer
+        .post(
+            &format!("/api/deals/{id}/return"),
+            json!({ "returnQrCommitment": machine::return_commitment(id, &secret).unwrap(),
+                    "returnVideoSha256": video, "returnTrackingNumber": "INP2" }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::OK, "return: {v}");
+    secret
+}
+
+pub async fn confirm_return(seller: &Api, id: &str, secret: &str) -> Resp {
+    seller.post(&format!("/api/deals/{id}/confirm-return"), json!({ "returnQrSecret": secret })).await
+}

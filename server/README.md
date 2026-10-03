@@ -1,36 +1,46 @@
 # unbox — backend sklepu (`server/`)
 
-Zwykły backend HTTP: **aplikacja → REST API → SQLite / pliki / serwis AI**. Backend jest źródłem prawdy dla stanu transakcji i demo-płatności. Bez blockchaina.
+**Backend: Rust + Axum + SQLite.** Zwykły backend HTTP: **aplikacja → REST API → SQLite / pliki / serwis AI**. Backend jest źródłem prawdy dla stanu transakcji i demo-płatności. Bez blockchaina.
 
-- Hono + `@hono/node-server`, SQLite (`node:sqlite`), zod, JWT (jose), bcryptjs, busboy.
-- Typy, schematy, maszyna stanów, `decide()` i helpery QR: `@unbox/shared` (`packages/shared`).
+- Rust 1.95 (`rust-toolchain.toml` w root repo), `axum` 0.8 + `tokio`, `rusqlite` (wbudowane SQLite, WAL), `serde`/`serde_json`, `jsonwebtoken` (HS256), `bcrypt`, `sha2`, `reqwest` (rustls), `tracing`.
+- Samodzielny crate: `server/Cargo.toml` ma własny `[workspace]`, więc nie należy do root workspace'u Cargo (`programs/*`).
+- Kontrakt JSON 1:1 z `@unbox/shared` (`packages/shared`): typy, schematy zod, etykiety, helpery QR i `decide()` dla aplikacji.
 
 ## Uruchomienie
 
 ```bash
-pnpm install                         # w root repo (pnpm workspace, Node 24)
-cp server/.env.example server/.env   # opcjonalnie
-pnpm dev:server                      # http://localhost:4000, AI=mock
+cd server
+cargo run                                   # http://localhost:4000, AI=mock, baza w server/data/unbox.db
+cargo run -- seed-reset                     # czyści bazę, zakłada dane demo i kończy
+cargo test                                  # testy jednostkowe + integracyjne (osobne procesy, bazy tymczasowe)
+cargo clippy --all-targets -- -D warnings
+cargo fmt -- --check
 ```
+
+Z root repo: `pnpm dev:server`, `pnpm test:backend`, `pnpm test:contract`. Zmienne ustawiasz w powłoce (`cargo run` nie wczytuje `.env`); wzór i opis: `server/.env.example`.
+
+Na Windows z włączonym Smart App Control niepodpisane `rustc`/`gcc` są blokowane. Wtedy budujemy w kontenerze, np. `docker run --rm -v "$PWD/server:/work" -w /work rust:1.95-slim cargo test` (do `clippy`/`fmt`: `rustup component add clippy rustfmt`).
 
 Telefon nie widzi `localhost`: ustaw w aplikacji `EXPO_PUBLIC_API_URL=http://<IP-laptopa>:4000` albo adres tunelu, a w backendzie `PUBLIC_BASE_URL` na ten sam adres (z niego wyrocznia pobiera nagrania).
 
 | Zmienna | Domyślnie | Znaczenie |
 |---|---|---|
 | `PORT` | `4000` | port HTTP |
-| `DATA_DIR` | `server/data` | baza `unbox.db` + pliki `media/` (gitignored) |
-| `AI` | `mock` | `mock` (gotowe raporty) albo `http` (serwis wyroczni) |
+| `DATA_DIR` | `server/data` | baza `unbox.db` + `media/` + `jwt-secret` (gitignored) |
+| `AI` | `mock` | `mock` (gotowe raporty, nagłówek `X-Demo-Scenario`) albo `http` (serwis wyroczni) |
 | `AI_URL` | `http://localhost:8000` | adres wyroczni (tylko `AI=http`) |
 | `AI_TIMEOUT_MS` / `AI_MAX_ATTEMPTS` / `AI_RETRY_MS` | `120000` / `3` / `2000` | timeout i ponowienia oceny |
 | `MOCK_AI_DELAY_MS` | `3000` | opóźnienie raportu w `AI=mock` |
+| `AI_HEALTH_TTL_MS` | `30000` | jak często health odświeża w tle stan wyroczni |
 | `TIMEOUTS` | `demo` | `demo` (minuty) albo `prod` (dni) |
 | `MAX_UPLOAD_MB` | `60` | limit pliku w `POST /api/media` |
-| `JWT_SECRET` | losowy w `DATA_DIR/jwt-secret` | **wymagany** przy `NODE_ENV=production`; poza produkcją generowany automatycznie |
+| `JWT_SECRET` | losowy w `DATA_DIR/jwt-secret` | **wymagany** przy `APP_ENV`/`NODE_ENV=production` (bez niego serwer nie wstaje) |
 | `PUBLIC_BASE_URL` | `http://localhost:PORT` | publiczny adres backendu (URL-e plików) |
-| `ENABLE_DEV_CLOCK` | `0` | test-only `POST /api/dev/clock`; nigdy przy `NODE_ENV=production` |
+| `ENABLE_DEV_CLOCK` | `0` | test-only `POST /api/dev/clock`; nigdy w produkcji |
 | `SWEEP_MS` | `5000` | co ile backend domyka transakcje po terminie |
+| `QUIET` / `RUST_LOG` | — | poziom logów (`tracing`) |
 
-`pnpm --filter @unbox/server seed` czyści bazę i zakłada dane demo. Zwykły start seeduje tylko pustą bazę (restart niczego nie zmienia).
+Zwykły start seeduje tylko pustą bazę, więc restart niczego nie zmienia.
 
 ## Konta demo (hasło `demo1234`, saldo startowe 1000 zł)
 
@@ -45,7 +55,7 @@ Nowe konta (`POST /api/auth/register`) też dostają 1000 zł salda demo.
 ## Model
 
 - **Ogłoszenie** (`Listing`): `Listed` → `Sold` (zakup) albo `Cancelled`. Edycja i anulowanie tylko w `Listed`.
-- **Transakcja** (`Deal`, `id` = id ogłoszenia). Każde przejście wykonuje `transition()` z `@unbox/shared` w jednej transakcji SQLite razem z księgą płatności:
+- **Transakcja** (`Deal`, `id` = id ogłoszenia). Każde przejście wykonuje `machine::transition()` (`server/src/machine.rs`, port maszyny stanów z `@unbox/shared`) w jednej transakcji SQLite razem z księgą płatności:
 
 | Akcja (endpoint) | Kto | Ze stanu | Do stanu | Płatność |
 |---|---|---|---|---|
@@ -62,7 +72,7 @@ Terminy (`deadlineAt = statusChangedAt + TIMEOUTS[status]`, demo / prod): `Paid`
 
 **Płatności demo** (tabela `ledger`): saldo = suma wpisów (`topup`, `secure` −cena, `release` +cena sprzedającemu, `refund` +cena kupującemu). Zakup sprawdza saldo w tej samej transakcji SQLite. Jedno rozliczenie na transakcję wymusza też unikalny indeks w bazie. `heldMinor` = suma cen aktywnych zakupów.
 
-**QR** (`@unbox/shared`): sekret = 32 losowe bajty (hex), treść `UNBOX1:<dealId>:<secret>` (zwrot: `UNBOX1R:`), commitment wysyłki `sha256(utf8(dealId) || secret)`, zwrotu `sha256("return" || utf8(dealId) || secret)`. Aplikacja wysyła commitment przy `ship`/`return`, a sekret (ze skanu) przy `accept`/`dispute`/`confirm-return`; backend sprawdza zgodność (`409 QR_MISMATCH`).
+**QR** (`server/src/machine.rs`, te same wektory co `@unbox/shared`): sekret = 32 losowe bajty (hex), treść `UNBOX1:<dealId>:<secret>` (zwrot: `UNBOX1R:`), commitment wysyłki `sha256(utf8(dealId) || secret)`, zwrotu `sha256("return" || utf8(dealId) || secret)`. Aplikacja wysyła commitment przy `ship`/`return`, a sekret (ze skanu) przy `accept`/`dispute`/`confirm-return`; backend sprawdza zgodność (`409 QR_MISMATCH`).
 
 ## Endpointy
 
@@ -110,7 +120,7 @@ Treść QR, commitment i sekret liczą helpery z `@unbox/shared`: `createQr(kind
 
 ## Kontrakt z wyrocznią (O5, `AI=http`)
 
-`POST {AI_URL}/v1/disputes/analyze` (JSON, timeout `AI_TIMEOUT_MS`), schematy `OracleRequestSchema` / `OracleResponseSchema` w `@unbox/shared`:
+`POST {AI_URL}/v1/disputes/analyze` (JSON, timeout `AI_TIMEOUT_MS`), typy `OracleRequest` / `OracleResponse` w `server/src/model.rs` (schematy zod o tym samym kształcie w `@unbox/shared`):
 
 ```jsonc
 // żądanie
@@ -132,9 +142,12 @@ Backend: waliduje odpowiedź, sprawdza, że `evidence` = hasze nagrań z transak
 ## Testy
 
 ```bash
-pnpm typecheck:backend   # shared, server, scripts
-pnpm test:backend        # shared + server
-pnpm test:contract       # 11 scenariuszy sklepu na świeżym backendzie
+cd server && cargo test          # 5 jednostkowych (maszyna stanów, decide, QR, hasze) + integracyjne
+pnpm test:contract               # z root: black-box 11 scenariuszy sklepu (TS, schematy z @unbox/shared)
 ```
 
-Testy backendu (`server/test`) uruchamiają własny serwer na tymczasowej bazie i wolnym porcie; nie dotykają `server/data`. `pnpm contract-test` (bez runnera) działa na już uruchomionym serwerze z `ENABLE_DEV_CLOCK=1 AI=mock`.
+Testy integracyjne (`server/tests/`) uruchamiają binarkę serwera jako osobny proces, na tymczasowej bazie (`tempfile`) i wolnym porcie; nie dotykają `server/data`. Pokrywają: status codes i kształt błędów, 401/403/404/409, niezmienniki księgi płatności, równoległy zakup, równoległe `accept`/`settle`/`confirm-return`, timeout vs akcja, restart i idempotentny seed, walidację mediów, wyrocznię przez lokalny fake HTTP (zły JSON, 400, 500, timeout, złe hasze, brak pól, podsunięty werdykt) i blokady trybu produkcyjnego. `pnpm test:contract` buduje serwer przez `cargo`; z `API_URL=…` testuje już działający serwer uruchomiony z `ENABLE_DEV_CLOCK=1 AI=mock`.
+
+## Transakcje i wyścigi
+
+Jedno połączenie SQLite (WAL) za mutexem: wszystkie operacje na bazie są serializowane, a każda operacja biznesowa (zakup, przejście stanu z rozliczeniem, edycja ogłoszenia) wykonuje się w transakcji `BEGIN IMMEDIATE`, więc odczyt stanu, decyzja maszyny stanów, zapis i wpis do księgi są atomowe. Dodatkowo unikalny indeks `ledger_settlement` (jedna wypłata/zwrot na transakcję) blokuje drugie rozliczenie na poziomie bazy. W efekcie: dwa równoległe zakupy tego samego ogłoszenia → jeden sukces, drugi `409`; podwójne `accept`/`settle`/`confirm-return` → jedno rozliczenie; saldo sprawdzane w tej samej transakcji co zakup (brak debetu). Ocena AI działa w tle (`tokio::spawn`) i nie trzyma blokady podczas czekania na wyrocznię.

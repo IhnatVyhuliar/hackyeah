@@ -8,9 +8,9 @@
   "scripts": {
     "sync-idl": "mkdir -p packages/shared/idl && cp target/idl/unbox_escrow.json target/types/unbox_escrow.ts packages/shared/idl/",
     "test:program": "anchor test",
-    "dev:server": "pnpm --filter @unbox/server dev",
-    "test:backend": "pnpm --filter @unbox/shared test && pnpm --filter @unbox/server test",
-    "typecheck:backend": "pnpm --filter @unbox/shared typecheck && pnpm --filter @unbox/server typecheck && tsc -p scripts",
+    "dev:server": "cargo run --manifest-path server/Cargo.toml",
+    "test:backend": "pnpm --filter @unbox/shared test && cargo test --manifest-path server/Cargo.toml",
+    "typecheck:backend": "pnpm --filter @unbox/shared typecheck && tsc -p scripts",
     "test:contract": "tsx scripts/run-contract-test.ts",
     "contract-test": "tsx scripts/contract-test.ts"
   },
