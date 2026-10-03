@@ -13,7 +13,7 @@
     "typecheck:backend": "pnpm --filter @unbox/shared typecheck && tsc -p scripts",
     "test:contract": "tsx scripts/run-contract-test.ts",
     "contract-test": "tsx scripts/contract-test.ts",
-    "deploy:devnet": "anchor build && anchor deploy --provider.cluster devnet"
+    "deploy:devnet": "anchor build && anchor deploy --provider.cluster ${DEPLOY_URL:-devnet}"
   },
   "devDependencies": {
     "@anchor-lang/core": "1.1.2",
