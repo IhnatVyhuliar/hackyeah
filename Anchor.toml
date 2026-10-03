@@ -1,0 +1,21 @@
+[toolchain]
+package_manager = "pnpm"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.devnet]
+unbox_escrow = "CEoTTEq46mxFrNqPu9EbpFbDshsrSTZV9GB14XPT1Nyq"
+
+[programs.localnet]
+unbox_escrow = "CEoTTEq46mxFrNqPu9EbpFbDshsrSTZV9GB14XPT1Nyq"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "node --test --test-concurrency=1 --disable-warning=ExperimentalWarning 'tests/*.test.ts'"
+
+[hooks]
