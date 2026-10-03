@@ -1,0 +1,7 @@
+node_modules/
+.env
+keys/
+fixtures/**/*.mp4
+fixtures/**/*.mov
+fixtures/**/*.jpg
+out/

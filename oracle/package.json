@@ -6,15 +6,18 @@
   "scripts": {
     "dev": "node --env-file-if-exists=.env --import tsx src/watch.ts",
     "fixture": "node --env-file-if-exists=.env --import tsx src/fixture.ts",
-    "test": "node --import tsx --test 'src/**/*.test.ts'"
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anchor-lang/core": "1.1.2",
     "@google/genai": "^2.27.0",
+    "@solana/web3.js": "1.99.0",
     "@supabase/supabase-js": "^2.117.2"
   },
   "devDependencies": {
     "@types/node": "^24",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.0"
   }
 }
