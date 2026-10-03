@@ -49,7 +49,7 @@ Odpowiadaj zespołowi **po polsku**. Kod, identyfikatory, commity i komentarze p
   - Reguły (terminy, kto co może) są identyczne dla każdego i nie da się ich zmienić w trakcie sprawy.
   - Spór rozstrzyga wyrocznia AI o **binarnym** uprawnieniu (kupujący albo sprzedający). Nie może zabrać środków ani ich zamrozić, bo po terminie każdy może domknąć transakcję.
   - Dowody (hash ogłoszenia, hashe nagrań, commitment QR) są zapisane on-chain ze znacznikiem czasu.
-  - Koszt dla użytkownika: tylko opłata sieci (ułamek grosza). Koszt wyroczni (tokeny Gemini) **pokrywamy my**.
+  - Koszt dla użytkownika: opłata sieci (ułamek grosza) plus depozyt za miejsce na koncie `Deal`, który dziś zostaje na koncie (patrz „Znane ograniczenia” w §12). Koszt wyroczni (tokeny Gemini) **pokrywamy my**.
 
 ---
 
@@ -484,12 +484,15 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 - Arweave/IPFS zamiast Supabase;
 - USDC zamiast SOL;
 - kaucja za reklamację jako bariera przeciw spamowi;
+- instrukcja `close_deal` dla sprzedającego po zakończeniu lub anulowaniu, która zwraca mu depozyt rent;
 - możliwość zakwestionowania zwrotu przez sprzedającego;
 - wyrocznia statusu przewoźnika (InPost);
 - odzyskiwanie portfela (passkeys albo MPC) zamiast jednego klucza na telefonie;
 - prywatny bucket z podpisanymi linkami zamiast publicznych nagrań.
 
 **Znane ograniczenia** (mówimy o nich wprost, bo jury ceni świadomość ograniczeń):
+
+- depozyt rent konta `Deal` (663 B, ok. 0,0055 SOL) płaci sprzedający przy wystawieniu i dziś nie wraca, także po anulowaniu; przy cenach 0,03–0,09 SOL to zauważalna część ceny, a nie „ułamek grosza”;
 
 - pojedynczy klucz arbitra to rezydualne zaufanie;
 - zmodyfikowany klient może podsunąć spreparowane nagranie;
