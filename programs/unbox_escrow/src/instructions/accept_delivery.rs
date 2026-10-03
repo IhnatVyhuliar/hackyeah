@@ -2,7 +2,8 @@ use anchor_lang::prelude::*;
 
 use crate::constants::DEAL_SEED;
 use crate::errors::UnboxError;
-use crate::state::Deal;
+use crate::logic::{require_before_deadline, ship_commitment};
+use crate::state::{Deal, DealStatus};
 
 #[derive(Accounts)]
 pub struct AcceptDelivery<'info> {
@@ -20,6 +21,17 @@ pub struct AcceptDelivery<'info> {
     pub seller: UncheckedAccount<'info>,
 }
 
-pub fn handle_accept_delivery(_ctx: Context<AcceptDelivery>, _qr_secret: [u8; 32]) -> Result<()> {
-    err!(UnboxError::NotImplemented)
+pub fn handle_accept_delivery(ctx: Context<AcceptDelivery>, qr_secret: [u8; 32]) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
+    let key = ctx.accounts.deal.key();
+    let deal = &ctx.accounts.deal;
+    require!(deal.status == DealStatus::Shipped, UnboxError::InvalidStatus);
+    require_before_deadline(deal, now)?;
+    // The secret is revealed in the same tx as the decision and the status changes, so the QR is single-use.
+    require!(ship_commitment(&key, &qr_secret) == deal.qr_commitment, UnboxError::QrMismatch);
+    let price = deal.price_lamports;
+    ctx.accounts.deal.sub_lamports(price)?;
+    ctx.accounts.seller.add_lamports(price)?;
+    ctx.accounts.deal.set_status(key, DealStatus::Completed, now);
+    Ok(())
 }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import * as anchor from "@anchor-lang/core";
 import type { UnboxEscrow } from "../target/types/unbox_escrow";
 
@@ -66,4 +66,29 @@ export async function createPaid(): Promise<Listed & { buyer: Kp }> {
     .signers([buyer])
     .rpc();
   return { ...l, buyer };
+}
+
+export async function createShipped(): Promise<Listed & { buyer: Kp; secret: Buffer }> {
+  const p = await createPaid();
+  const secret = randomBytes(32);
+  await program.methods
+    .markShipped(bytes32(sha256(p.deal.toBuffer(), secret)), bytes32(sha256(Buffer.from("packing.mp4"))), "INPOST-1")
+    .accountsPartial({ seller: p.seller.publicKey, deal: p.deal })
+    .signers([p.seller])
+    .rpc();
+  return { ...p, secret };
+}
+
+/** Unix time the program sees (Clock sysvar). */
+export async function chainNow(): Promise<number> {
+  const clock = await connection.getAccountInfo(anchor.web3.SYSVAR_CLOCK_PUBKEY, "confirmed");
+  return Number(clock!.data.readBigInt64LE(32));
+}
+
+/** Program built with `test-timeouts` (5 s). Surfpool's clock only moves with slots, so jump it forward. */
+export async function waitPastDeadline() {
+  const target = (await chainNow()) + 10;
+  const res = await (connection as any)._rpcRequest("surfnet_timeTravel", [{ absoluteTimestamp: target * 1000 }]);
+  if (res.error) throw new Error(`surfnet_timeTravel: ${JSON.stringify(res.error)}`);
+  assert.ok((await chainNow()) >= target, "clock did not move");
 }
