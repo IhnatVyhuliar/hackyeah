@@ -4,7 +4,7 @@
   "remoteUser": "root",
   "workspaceMount": "source=${localWorkspaceFolder},target=/work,type=bind",
   "workspaceFolder": "/work",
-  "forwardPorts": [8899],
+  "forwardPorts": [8899, 4000],
   "mounts": [
     "source=${localEnv:HOME}/.config/solana,target=/root/.config/solana,type=bind",
     "source=unbox-cargo-registry,target=/root/.cargo/registry,type=volume"

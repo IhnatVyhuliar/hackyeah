@@ -115,22 +115,24 @@ pub struct Deal {
     pub deal_id: u64,
     pub price_lamports: u64,
     pub listing_hash: [u8; 32],        // sha256 bajtów metadata.json
-    #[max_len(200)] pub metadata_uri: String,
     pub status: DealStatus,
     pub status_changed_at: i64,        // Clock::unix_timestamp przy KAŻDEJ zmianie statusu
     pub qr_commitment: [u8; 32],
     pub packing_video_hash: [u8; 32],
-    #[max_len(32)] pub tracking_number: String,
     pub unboxing_video_hash: [u8; 32],
     pub complaint_hash: [u8; 32],
     pub verdict: Verdict,              // None | Seller | Buyer
     pub report_hash: [u8; 32],         // sha256 raportu wyroczni
     pub return_qr_commitment: [u8; 32],
     pub return_video_hash: [u8; 32],
-    #[max_len(32)] pub return_tracking_number: String,
     pub bump: u8,
+    #[max_len(200)] pub metadata_uri: String,
+    #[max_len(32)] pub tracking_number: String,
+    #[max_len(32)] pub return_tracking_number: String,
 }
 ```
+
+Pola `String` są na końcu, więc `status` ma stały offset 152 (`STATUS_OFFSET` w `state.rs`: 8 bajtów dyskryminatora + 3 × `Pubkey` + 2 × `u64` + `listing_hash`). Dzięki temu `getProgramAccounts` może filtrować po statusie przez `memcmp`.
 
 **Escrow:**
 
@@ -179,13 +181,15 @@ Akcje stron wymagają `now < deadline`, a `settle_expired` wymaga `now >= deadli
 
 ### Timeouty (`constants.rs`, feature flag `demo`, domyślnie WŁĄCZONY na hackathonie)
 
-| Stała | Produkcja | `demo` |
-|---|---|---|
-| `SHIP_TIMEOUT` | 3 dni | 10 min |
-| `UNBOX_TIMEOUT` | 7 dni | 60 min (żeby dało się przygotować transakcję przed prezentacją) |
-| `ORACLE_TIMEOUT` | 24 h | 10 min |
-| `RETURN_SHIP_TIMEOUT` | 3 dni | 10 min |
-| `RETURN_CONFIRM_TIMEOUT` | 7 dni | 10 min |
+| Stała | Produkcja | `demo` | `test-timeouts` |
+|---|---|---|---|
+| `SHIP_TIMEOUT` | 3 dni | 10 min | 5 s |
+| `UNBOX_TIMEOUT` | 7 dni | 60 min (żeby dało się przygotować transakcję przed prezentacją) | 5 s |
+| `ORACLE_TIMEOUT` | 24 h | 10 min | 5 s |
+| `RETURN_SHIP_TIMEOUT` | 3 dni | 10 min | 5 s |
+| `RETURN_CONFIRM_TIMEOUT` | 7 dni | 10 min | 5 s |
+
+`test-timeouts` wygrywa z `demo` i służy tylko do `pnpm test:program`. `pnpm deploy:devnet` przebudowuje program bez tej flagi. Zegar Surfpoola stoi między slotami, więc testy przesuwają go przez `surfnet_timeTravel` (`waitPastDeadline` w `tests/helpers.ts`).
 
 ### Kod QR (jednorazowy)
 
@@ -193,7 +197,7 @@ Akcje stron wymagają `now < deadline`, a `settle_expired` wymaga `now >= deadli
 - **Payload QR:**
   - wysyłka: `UNBOX1:<deal_pubkey_base58>:<secret_base58>`;
   - zwrot: `UNBOX1R:<deal_pubkey_base58>:<secret_base58>`.
-- **Commitment wysyłki:** `sha256(deal_pubkey || secret)`. On-chain liczony przez `anchor_lang::solana_program::hash::hashv(&[deal.key().as_ref(), &secret])`.
+- **Commitment wysyłki:** `sha256(deal_pubkey || secret)`. On-chain liczony w `logic::ship_commitment` przez `solana_sha256_hasher::hashv(&[deal.as_ref(), &secret])`.
 - **Commitment zwrotu:** `sha256("return" || deal_pubkey || secret)`.
 - **Jednorazowość wynika z programu:** sekret ujawnia się w tej samej transakcji co decyzja (`accept_delivery`/`open_dispute`), a zmiana statusu uniemożliwia ponowne użycie. Sprzedający zna sekret, ale nic mu to nie daje, bo te instrukcje może podpisać tylko kupujący.
 - Każda zmiana statusu emituje event Anchora (`DealStatusChanged`), z którego korzystają UI i wyrocznia.
@@ -333,26 +337,31 @@ Etykiety trzymamy w `packages/shared`.
 ├── package.json               # root workspace + skrypty (sync-idl, testy Anchora)
 ├── pnpm-workspace.yaml        # app, oracle, packages/*
 ├── .npmrc                     # node-linker=hoisted  (Metro + pnpm)
+├── rustfmt.toml               # max_width 120, jak server/rustfmt.toml
 ├── programs/unbox_escrow/     # TU ZNIKA POŚREDNIK
-│   └── src/{lib.rs, state.rs, constants.rs, errors.rs, instructions/*.rs}
+│   └── src/{lib.rs, state.rs, constants.rs, errors.rs, events.rs, logic.rs, instructions/*.rs}
 ├── tests/                     # testy Anchora (TS, localnet) — każda ścieżka z §4
 ├── packages/shared/           # IDL + typy, PROGRAM_ID, ORACLE_PUBKEY, commitmenty QR, etykiety PL
 ├── app/                       # React Native (Expo)
 ├── oracle/                    # wyrocznia Gemini + crank settle_expired
 │   ├── prompts/v1.md
 │   └── src/{watch, evidence, gemini, decide, resolve}.ts
+├── server/                    # Rust (axum + SQLite): konta, ogłoszenia, media
+├── cli/                       # unbox-cli: demo bez telefonu, podpisuje z pliku keypaira (osobny crate)
 ├── scripts/                   # zasilenie portfeli demo, seed ogłoszeń, staging demo
 └── docs/                      # uzasadnienie, skrypt demo, materiały do pitchu
 ```
 
 | Komenda | Co robi |
 |---|---|
-| `anchor build` | buduje program |
-| `anchor test` | testy na localnecie (Surfpool) |
-| `anchor deploy --provider.cluster devnet` | deploy na devnet (**tylko właściciel programu**) |
+| `anchor build` | buduje program (profil `demo`) |
+| `pnpm test:program` | buduje z `test-timeouts` i odpala testy na localnecie (Surfpool); w dev containerze |
+| `pnpm deploy:devnet` | przebudowuje bez `test-timeouts` i robi upgrade na devnecie (**tylko właściciel programu**; przy limitach publicznego RPC: `anchor deploy --provider.cluster <RPC Helius>`) |
 | `pnpm sync-idl` | kopiuje `target/idl/*.json` i `target/types/*.ts` do `packages/shared`; commitujemy wynik |
 | `pnpm --filter app start` | Expo |
 | `pnpm --filter oracle dev` | wyrocznia |
+| `pnpm dev:server` | backend `server/` (w dev containerze) |
+| `cd cli && cargo run -- --help` | `unbox-cli`: `link`, `publish`, `buy`, `ship`, `accept`, `settle`, `show` (w dev containerze) |
 
 **Stack** (on-chain i klient TS zgodne z dev containerem Superteam, na którym opierają się materiały sponsora):
 
@@ -406,7 +415,7 @@ Zadania, kryteria akceptacji i przekazania: `docs/zadania/README.md` (przegląd)
 - **Tylko devnet.** Nigdy mainnet ani prawdziwe środki.
 - **Nigdy nie commituj** `.env`, keypairów (`*.json` z kluczami, `oracle/keys/`) ani kluczy API. Zawsze dodawaj `.env.example`.
 - Prosty działający kod jest lepszy niż abstrakcje. Interfejs może być surowy, ale musi działać na żywo.
-- Zanim powiesz „gotowe”, uruchom odpowiednią rzecz: `anchor test` / `pnpm typecheck` / aplikację na telefonie / `oracle fixture`. Jeśli czegoś nie dało się uruchomić, powiedz to wprost.
+- Zanim powiesz „gotowe”, uruchom odpowiednią rzecz: `pnpm test:program` / `pnpm typecheck` / aplikację na telefonie / `oracle fixture`. Jeśli czegoś nie dało się uruchomić, powiedz to wprost.
 - Zostań w obszarze zadania (§8). Nie refaktoryzuj cudzych katalogów przy okazji.
 - Nie dodawaj zależności bez potrzeby, a natywnych w `app/` bez uzgodnienia.
 - Gdy zmienia się decyzja projektowa, **zaktualizuj ten plik i dopisz wpis do §13**.
@@ -498,3 +507,6 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 - **2026-10-03** — Stary plan SellSol (`docs/KONTRAKT.md`, serwer REST, AI w Pythonie) usunięty. Kontraktem jest ten plik + IDL; zadania w `docs/zadania/`.
 - **2026-10-03** — `@anchor-lang/core` przypięty dokładnie do `1.1.2` (także w root `pnpm.overrides`), bo `^1.1.2` pobiera już 1.2.0, niezgodne z CLI 1.1.2. `packageManager: pnpm@9.15.9`; `pnpm install` tylko na hoście, nie w kontenerze (pnpm 12 w kontenerze blokuje build scripts i zapisuje pliki jako root).
 - **2026-10-03** — Specyfikacja UI w `docs/ui.md`. Na każdym ekranie transakcji jest karta „Co teraz?” (gdzie są środki, kto ma ruch, do kiedy, co się stanie, jeśli nikt nic nie zrobi). Przycisk `settle_expired` jest widoczny dla każdego, przed terminem zablokowany z odliczaniem, a odblokowuje się według zegara sieci (Clock sysvar), nie telefonu. Każda nieodwracalna operacja ma ekran zgody (`ConfirmSheet`), bo wbudowany portfel podpisuje w tle; przy zakupie widać akceptację weryfikatora. Sukces pokazujemy dopiero po `confirmed`. Werdykt pokazuje ścieżkę reguły `decide()`, a nie „AI zdecydowało”. W tekstach nie ma słów „gwarantowane”, „niezależny” ani „automatycznie”. Tylko tryb jasny, a telefony demo mają kolor roli. Wspólne komponenty UI w `app/src/ui/` i `app/src/components/` (O4).
+- **2026-10-04** — Konto `Deal`: pola `String` przeniesione na koniec, więc `status` ma stały offset 152 (`STATUS_OFFSET`) do filtrów `memcmp`. IDL v0 w `packages/shared/idl/`; program z profilem `demo` wdrożony na devnet pod tym samym adresem.
+- **2026-10-04** — Feature `test-timeouts` (wszystkie terminy po 5 s) tylko do testów programu; zegar Surfpoola przesuwamy `surfnet_timeTravel`. Deploy zawsze przebudowuje bez tej flagi.
+- **2026-10-04** — `unbox-cli` (`cli/`) jako zapasowe demo bez telefonu: loguje się do `server/`, podpisuje kluczem z pliku osoby, która je uruchamia, i sam sprawdza hash `metadata.json` przed zakupem.
