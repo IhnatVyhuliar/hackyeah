@@ -1,0 +1,28 @@
+{
+  "name": "sellsol",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "app",
+    "landing",
+    "server",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "npm test -w packages/shared",
+    "dev:server": "npm run dev -w server",
+    "contract-test": "tsx scripts/contract-test.ts",
+    "typecheck": "tsc -p packages/shared && tsc -p server"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "@sellsol/shared": "*",
+    "@solana/web3.js": "1.99.0",
+    "zod": "^4.6.5"
+  }
+}

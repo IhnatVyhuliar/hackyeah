@@ -1,0 +1,11 @@
+node_modules/
+.env*
+!.env.example
+scripts/keys/
+server/data/
+ai/samples/*.mp4
+ai/data/
+spikes/
+dist/
+*.log
+.DS_Store
