@@ -63,7 +63,7 @@ Shared description (paste into every prompt):
 
 ## After generating
 
-- Save as `packing.mp4` / `unboxing.mp4` / `photo-*.jpg` in each case directory (media is git-ignored).
+- Save into `_media/` under the names from `README.md` (media is git-ignored); cases reference them in `expected.json`.
 - Check each video by eye: is the stain actually visible? Generators sometimes drop details; regenerate
   if not.
 - Veo clips are short (~8 s). If the model calls them too short or "poor", extend the clip or record

@@ -1,1 +1,5 @@
-{ "verdict": "SELLER", "tracking_number": "" }
+{
+  "verdict": "SELLER",
+  "tracking_number": "",
+  "media": { "packing": "packing-stain.mp4", "unboxing": "unboxing-stain.mp4", "photos": ["photo-stain.jpg"] }
+}

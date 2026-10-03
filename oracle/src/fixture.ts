@@ -1,58 +1,104 @@
 // Runs the model + decide() on local files, without the chain.
-//   pnpm --filter oracle fixture fixtures/stain [--runs 3]
-// Directory: metadata.json, photo-*.jpg, packing.mp4, unboxing.mp4, complaint.json, expected.json
-// expected.json: { "verdict": "BUYER" | "SELLER", "tracking_number"?: string }
+//   pnpm --filter oracle fixture fixtures/stain [fixtures/cut ...] [--runs 3]
+//   pnpm --filter oracle fixture --all [--runs 3]
+// Case directory: metadata.json, complaint.json, expected.json:
+//   { "verdict": "BUYER" | "SELLER", "tracking_number"?: string,
+//     "media"?: { "packing": "x.mp4", "unboxing": "y.mp4", "photos": ["z.jpg"] } }
+// Media named in expected.json live in fixtures/_media; without "media" the case directory must
+// contain packing.mp4, unboxing.mp4 and photo-*.jpg itself.
+import { existsSync } from "node:fs";
 import { readFile, readdir, mkdir, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { decide } from "./decide.ts";
 import { analyzeWithRetry } from "./gemini.ts";
 import type { Complaint, ListingMetadata } from "./evidence.ts";
 import type { Verdict } from "./report.ts";
 
+interface Expected {
+  verdict: Verdict;
+  tracking_number?: string;
+  media?: { packing: string; unboxing: string; photos?: string[] };
+}
+
 const args = process.argv.slice(2);
-const dir = args.find((a) => !a.startsWith("--"));
 const runsIdx = args.indexOf("--runs");
 const runs = runsIdx >= 0 ? Number(args[runsIdx + 1]) : 1;
-if (!dir) {
-  console.error("usage: pnpm fixture <dir> [--runs N]");
+const positional = args.filter((a, i) => !a.startsWith("--") && i !== runsIdx + 1);
+
+let dirs = positional;
+if (args.includes("--all")) {
+  const root = positional[0] ?? "fixtures";
+  dirs = (await readdir(root, { withFileTypes: true }))
+    .filter((d) => d.isDirectory() && !d.name.startsWith("_"))
+    .map((d) => join(root, d.name))
+    .sort();
+}
+if (!dirs.length) {
+  console.error("usage: pnpm fixture <dir>... [--runs N] | pnpm fixture --all [fixtures] [--runs N]");
   process.exit(2);
 }
 
-const readJson = async <T>(name: string): Promise<T> => JSON.parse(await readFile(join(dir, name), "utf8")) as T;
-
-const metadata = await readJson<ListingMetadata>("metadata.json");
-const complaint = await readJson<Complaint>("complaint.json");
-const expected = await readJson<{ verdict: Verdict; tracking_number?: string }>("expected.json");
-const photoNames = (await readdir(dir)).filter((f) => /^photo-.*\.(jpe?g|png|webp)$/i.test(f)).sort();
-const photos = await Promise.all(photoNames.map(async (p) => ({ path: p, bytes: await readFile(join(dir, p)) })));
-const packing = await readFile(join(dir, "packing.mp4"));
-const unboxing = await readFile(join(dir, "unboxing.mp4"));
-
-const name = basename(dir);
-console.log(`[fixture] ${name}: ${photos.length} photos, packing ${(packing.length / 1e6).toFixed(1)} MB, unboxing ${(unboxing.length / 1e6).toFixed(1)} MB, expected ${expected.verdict}`);
-
-await mkdir("out", { recursive: true });
-let failures = 0;
-for (let i = 1; i <= runs; i++) {
-  const res = await analyzeWithRetry({
-    metadata,
-    photos,
-    trackingNumber: expected.tracking_number ?? "",
-    packing,
-    unboxing,
-    complaint,
-  });
-  const verdict = decide(res.report);
-  const ok = verdict === expected.verdict;
-  if (!ok) failures++;
-  const outPath = join("out", `${name}-run${i}-${Date.now()}.json`);
-  await writeFile(outPath, JSON.stringify({ verdict, expected: expected.verdict, ...res }, null, 2));
-  console.log(
-    `[fixture] ${name} run ${i}/${runs}: ${verdict} ${ok ? "✓" : `✗ (expected ${expected.verdict})`}` +
-      ` | ${res.model} | ${JSON.stringify(res.timings)} | tokens ${JSON.stringify(res.usage)} | ${outPath}`,
-  );
-  console.log(`  reasoning: ${res.report.reasoning}`);
+async function loadCase(dir: string) {
+  const readJson = async <T>(name: string) => JSON.parse(await readFile(join(dir, name), "utf8")) as T;
+  const expected = await readJson<Expected>("expected.json");
+  const mediaDir = join(dirname(dir), "_media");
+  const packingPath = expected.media ? join(mediaDir, expected.media.packing) : join(dir, "packing.mp4");
+  const unboxingPath = expected.media ? join(mediaDir, expected.media.unboxing) : join(dir, "unboxing.mp4");
+  const photoPaths = expected.media
+    ? (expected.media.photos ?? []).map((p) => join(mediaDir, p))
+    : (await readdir(dir)).filter((f) => /^photo-.*\.(jpe?g|png|webp)$/i.test(f)).sort().map((f) => join(dir, f));
+  const missing = [packingPath, unboxingPath, ...photoPaths].filter((p) => !existsSync(p));
+  if (missing.length) return { missing };
+  return {
+    missing,
+    expected,
+    input: {
+      metadata: await readJson<ListingMetadata>("metadata.json"),
+      complaint: await readJson<Complaint>("complaint.json"),
+      trackingNumber: expected.tracking_number ?? "",
+      packing: await readFile(packingPath),
+      unboxing: await readFile(unboxingPath),
+      photos: await Promise.all(photoPaths.map(async (p) => ({ path: basename(p), bytes: await readFile(p) }))),
+    },
+    media: { packing: basename(packingPath), unboxing: basename(unboxingPath) },
+  };
 }
 
-console.log(`[fixture] ${name}: ${runs - failures}/${runs} matched`);
-process.exit(failures ? 1 : 0);
+await mkdir("out", { recursive: true });
+const summary: { name: string; expected: string; results: string[] }[] = [];
+
+for (const dir of dirs) {
+  const name = basename(dir);
+  const c = await loadCase(dir);
+  if (!c.expected || !c.input) {
+    console.log(`[fixture] ${name}: SKIPPED, missing ${c.missing.map((m) => basename(m)).join(", ")}`);
+    summary.push({ name, expected: "?", results: ["missing media"] });
+    continue;
+  }
+  console.log(`[fixture] ${name}: ${c.media.packing} + ${c.media.unboxing}, ${c.input.photos.length} photos, expected ${c.expected.verdict}`);
+  const row = { name, expected: c.expected.verdict, results: [] as string[] };
+  summary.push(row);
+  for (let i = 1; i <= runs; i++) {
+    try {
+      const res = await analyzeWithRetry(c.input);
+      const verdict = decide(res.report);
+      const ok = verdict === c.expected.verdict;
+      row.results.push(ok ? `${verdict} ✓` : `${verdict} ✗`);
+      const outPath = join("out", `${name}-run${i}-${Date.now()}.json`);
+      await writeFile(outPath, JSON.stringify({ verdict, expected: c.expected.verdict, ...res }, null, 2));
+      console.log(
+        `[fixture] ${name} run ${i}/${runs}: ${verdict} ${ok ? "✓" : `✗ (expected ${c.expected.verdict})`}` +
+          ` | ${res.model} ${res.promptVersion} | ${JSON.stringify(res.timings)} | tokens ${JSON.stringify(res.usage)} | ${outPath}`,
+      );
+      console.log(`  reasoning: ${res.report.reasoning}`);
+    } catch (e) {
+      row.results.push("error");
+      console.log(`[fixture] ${name} run ${i}/${runs}: ERROR ${(e as Error).message.slice(0, 200)}`);
+    }
+  }
+}
+
+console.log("\n[fixture] summary");
+for (const r of summary) console.log(`  ${r.name.padEnd(12)} expected ${r.expected.padEnd(6)} → ${r.results.join(", ")}`);
+const allGreen = summary.every((r) => r.results.length > 0 && r.results.every((x) => x.endsWith("✓")));
+process.exit(allGreen ? 0 : 1);
