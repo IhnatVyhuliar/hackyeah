@@ -21,7 +21,7 @@ Ryzyko nr 1 projektu to Anchor + web3.js w React Native. Twój spike rozstrzyga 
 `CLAUDE.md` §3 (przepływ), §4 (instrukcje, statusy, QR), §6 (cała aplikacja, granice modułów, nagrania, storage, etykiety), §7 (stack, struktura). `docs/zadania/README.md` (trasy, konwencje, wektory). `docs/zadania/1-program.md` (tabela argumentów instrukcji: pisz pod nią, zanim pojawi się IDL v0).
 
 ## Stack i setup
-Node 24, pnpm, Expo (najnowsze SDK) + expo-router + TypeScript, Expo Go na telefonach, `@anchor-lang/core` ^1.1.2, `@solana/web3.js` 1.99.0, `@noble/hashes`, `bs58`, `react-native-get-random-values`, `buffer`. Moduły Expo: `expo-camera`, `expo-file-system`, `expo-crypto`, `expo-secure-store` (wszystkie działają w Expo Go).
+Node 24, pnpm, Expo (najnowsze SDK) + expo-router + TypeScript, Expo Go na telefonach, `@anchor-lang/core` 1.1.2, `@solana/web3.js` 1.99.0, `@noble/hashes`, `bs58`, `react-native-get-random-values`, `buffer`. Moduły Expo: `expo-camera`, `expo-file-system`, `expo-crypto`, `expo-secure-store` (wszystkie działają w Expo Go).
 
 **K0, przed 23:00 (tylko środowisko):**
 - Projekt Supabase, **publiczny** bucket `unbox`, polityka: anon może tylko `insert` do `unbox` (bez update i delete). Sprawdź limit rozmiaru pliku (darmowy plan: 50 MB). Klucz anon dla zespołu, service key prywatnie dla O5.
@@ -31,7 +31,7 @@ Node 24, pnpm, Expo (najnowsze SDK) + expo-router + TypeScript, Expo Go na telef
 ## Zadania
 
 ### P0. Scaffold monorepo (do 23:30, wszyscy czekają)
-- [ ] Root `package.json` (`private`, `packageManager`, skrypt `typecheck`, override `@solana/web3.js` → `1.99.0` jak w bootcampie), `pnpm-workspace.yaml` (`app`, `oracle`, `packages/*`), `.npmrc` (`node-linker=hoisted`).
+- [ ] Root `package.json` (`private`, `packageManager`, skrypt `typecheck`, overrides `@anchor-lang/core` → `1.1.2` i `@solana/web3.js` → `1.99.0` jak w bootcampie), `pnpm-workspace.yaml` (`app`, `oracle`, `packages/*`), `.npmrc` (`node-linker=hoisted`). Root już jest na `main` (O1, `pnpm@9.15.9`): dopisz `typecheck` i swoje paczki, nie zakładaj go od nowa.
 - [ ] `.gitignore`: `node_modules`, `.env*` z wyjątkiem `!.env.example`, `target/`, `.anchor/`, `test-ledger/`, `**/keys/`, `*-keypair.json`, `oracle/fixtures/**/*.mp4`, `.expo/`.
 - [ ] `app/`: `create-expo-app` (szablon domyślny: expo-router + TS). Działa w Expo Go przez `pnpm --filter app start`.
 - [ ] `packages/shared` jako `@unbox/shared` z `"main": "src/index.ts"` (TS bez builda: Metro, `tsx` i Node 24 biorą źródła bezpośrednio).

@@ -264,7 +264,7 @@ Wyrocznia to wąski serwis, który **zgłasza fakt**, a nie decyduje o pieniądz
 
 - Keypair generowany przy pierwszym uruchomieniu i trzymany w `expo-secure-store`.
 - Ukryte menu deweloperskie pozwala zaimportować klucz portfela demo. Tylko devnet.
-- `@solana/web3.js` 1.99.0 + `@anchor-lang/core` ^1.1.2 (IDL z `packages/shared`). Wersje jak w dev containerze, patrz „Stack” w §7.
+- `@solana/web3.js` 1.99.0 + `@anchor-lang/core` 1.1.2 (IDL z `packages/shared`). Wersje jak w dev containerze, patrz „Stack” w §7.
 - Portfel wbudowany zamiast Wallet Adaptera to świadoma decyzja: użytkownik spoza krypto nie ma Phantoma. Regulamin dopuszcza oba podejścia, jeśli wybór jest uzasadniony.
 - Polyfille na samym początku entry: `react-native-get-random-values`, `buffer`.
 - RPC ustawiasz w `EXPO_PUBLIC_RPC_URL`. Publiczny devnet ma limity zapytań; w razie potrzeby użyj darmowego RPC devnet, np. Helius.
@@ -358,7 +358,7 @@ Etykiety trzymamy w `packages/shared`.
 |---|---|
 | Program | Anchor 1.1.2, Rust 1.95, Solana CLI z obrazu dev containera (`quay.io/ottersec/anchor:v1.1.2`) |
 | Lokalny walidator | Surfpool (jest w dev containerze) |
-| Klient TS (testy, aplikacja, wyrocznia, skrypty) | `@anchor-lang/core` ^1.1.2 (w Anchorze 1.x to nowa nazwa `@coral-xyz/anchor`) + `@solana/web3.js` **1.99.0**, przypięty przez `pnpm.overrides` jak w przykładach bootcampu |
+| Klient TS (testy, aplikacja, wyrocznia, skrypty) | `@anchor-lang/core` **1.1.2** (w Anchorze 1.x to nowa nazwa `@coral-xyz/anchor`) + `@solana/web3.js` **1.99.0**, oba przypięte dokładnie przez `pnpm.overrides` w root (jak w przykładach bootcampu); `^1.1.2` pobrałoby już 1.2.0 |
 | Node i pakiety | Node 24, pnpm workspace; w `Anchor.toml`: `[toolchain] package_manager = "pnpm"` |
 | Aplikacja | Expo (najnowsze SDK, na start Expo Go), expo-router, TypeScript |
 | Portfel | wbudowany keypair w `expo-secure-store` (§6) |
@@ -489,3 +489,4 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 - **2026-10-03** — Portfel wbudowany zamiast Wallet Adaptera: świadomy wybór pod użytkownika spoza krypto (regulamin dopuszcza oba podejścia).
 - **2026-10-03** — Harmonogram przesunięty: start nie wcześniej niż sob 23:00 (regulamin pkt 5). Do zgłoszenia dodane: nazwa zespołu i lista członków.
 - **2026-10-03** — Stary plan SellSol (`docs/KONTRAKT.md`, serwer REST, AI w Pythonie) usunięty. Kontraktem jest ten plik + IDL; zadania w `docs/zadania/`.
+- **2026-10-03** — `@anchor-lang/core` przypięty dokładnie do `1.1.2` (także w root `pnpm.overrides`), bo `^1.1.2` pobiera już 1.2.0, niezgodne z CLI 1.1.2. `packageManager: pnpm@9.15.9`; `pnpm install` tylko na hoście, nie w kontenerze (pnpm 12 w kontenerze blokuje build scripts i zapisuje pliki jako root).

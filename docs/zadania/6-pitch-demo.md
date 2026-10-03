@@ -18,7 +18,7 @@ Pilnujesz też wymagań sponsora: na końcu tego pliku jest lista kontrolna z re
 Cały `CLAUDE.md`, szczególnie §1 (wymagania, uzasadnienie), §4 (maszyna stanów, `settle_expired`), §11 (demo), §12 (FAQ i ograniczenia). Oba PDF-y sponsora w root repo. `docs/zadania/README.md` (otwarte kwestie: to pytania, które może zadać jury).
 
 ## Stack i setup
-Node 24 + TS (`tsx`) w skryptach, `@anchor-lang/core` ^1.1.2, `@solana/web3.js` 1.99.0, IDL i helpery z `@unbox/shared`. Solana CLI (dev container albo lokalnie) do przelewów. `scrcpy` do pokazania ekranu telefonu na projektorze i nagrywania.
+Node 24 + TS (`tsx`) w skryptach, `@anchor-lang/core` 1.1.2, `@solana/web3.js` 1.99.0, IDL i helpery z `@unbox/shared`. Solana CLI (dev container albo lokalnie) do przelewów. `scrcpy` do pokazania ekranu telefonu na projektorze i nagrywania.
 
 **K0, przed 23:00 (tylko przygotowanie):**
 - Portfel zespołu zasilony devnet SOL (faucet.solana.com z logowaniem GitHub; kilka osób = więcej SOL). Rozdaj: deployer O1, wyrocznia O5, portfele demo.

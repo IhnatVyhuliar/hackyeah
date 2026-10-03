@@ -21,7 +21,7 @@ Jury zapyta: „czy AI to nie nowy pośrednik?”. Twoja odpowiedź jest w kodzi
 `CLAUDE.md` §2 (zasada nr 1 i ograniczenia wyroczni), §4 (`resolve_dispute`, `settle_expired`, timeouty), §5 (całość), §6 (ścieżki storage). `docs/zadania/README.md` (konwencje JSON, wektory, otwarte kwestie). Dokumentacja Gemini (sprawdź **aktualne** modele i API, nie pisz z pamięci): ai.google.dev/gemini-api/docs/models, `…/video-understanding`, `…/structured-output`, `…/files`.
 
 ## Stack i setup
-Node 24 + TypeScript (`tsx`), `@google/genai`, `@anchor-lang/core` ^1.1.2, `@solana/web3.js` 1.99.0, `@unbox/shared`, `node:crypto` do sha256, `fetch` do Supabase (REST albo `@supabase/supabase-js`). Testy: `node --test`.
+Node 24 + TypeScript (`tsx`), `@google/genai`, `@anchor-lang/core` 1.1.2, `@solana/web3.js` 1.99.0, `@unbox/shared`, `node:crypto` do sha256, `fetch` do Supabase (REST albo `@supabase/supabase-js`). Testy: `node --test`.
 
 **K0, przed 23:00 (tylko środowisko):**
 - Klucz Gemini (AI Studio); sprawdź limity zapytań dla wideo na swoim planie.

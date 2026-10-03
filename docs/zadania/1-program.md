@@ -17,7 +17,7 @@ Jesteś **właścicielem IDL**. Tylko Ty zmieniasz konto `Deal` i instrukcje. Po
 Wzorce z bootcampu: `github.com/matzayonc/solana-live-course-2026`, katalogi `diamond-hands` i `holdup` (podział na `instructions/`, `state.rs`, `error.rs`, `constants.rs`; `update_price.rs` w `holdup` to wzorzec „tylko ten klucz może”).
 
 ## Stack i setup
-Anchor 1.1.2, Rust 1.95, Surfpool, Node 24, pnpm, `@anchor-lang/core` ^1.1.2, `@solana/web3.js` 1.99.0, mocha + chai + ts-mocha. Wszystko jest w dev containerze sponsora.
+Anchor 1.1.2, Rust 1.95, Surfpool, Node 24, pnpm, `@anchor-lang/core` 1.1.2, `@solana/web3.js` 1.99.0, mocha + chai + ts-mocha. Wszystko jest w dev containerze sponsora.
 
 **K0, przed 23:00 (tylko środowisko):**
 - Sklonuj repo bootcampu i zbuduj dev container (VS Code „Reopen in Container” albo `docker build -t live .`). Budowa trwa, więc zrób to wcześniej.
