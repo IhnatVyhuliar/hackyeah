@@ -11,3 +11,8 @@ test-ledger/
 oracle/fixtures/**/*.mp4
 .expo/
 .DS_Store
+# backend
+server/data/
+dist/
+*.log
+spikes/
