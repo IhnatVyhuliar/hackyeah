@@ -260,6 +260,8 @@ Wyrocznia to wąski serwis, który **zgłasza fakt**, a nie decyduje o pieniądz
 | Szczegóły transakcji | oś statusów, odliczanie do terminu, przycisk `settle_expired` po terminie („Odbierz środki”), werdykt AI z uzasadnieniem, link do Explorera |
 | Portfel | adres, saldo, „Doładuj testowe SOL” |
 
+Wygląd, teksty, stany i komponenty każdego ekranu, macierz „Co teraz?” dla statusów i ról: **`docs/ui.md`**.
+
 ### Portfel i Solana
 
 - Keypair generowany przy pierwszym uruchomieniu i trzymany w `expo-secure-store`.
@@ -464,7 +466,9 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 - USDC zamiast SOL;
 - kaucja za reklamację jako bariera przeciw spamowi;
 - możliwość zakwestionowania zwrotu przez sprzedającego;
-- wyrocznia statusu przewoźnika (InPost).
+- wyrocznia statusu przewoźnika (InPost);
+- odzyskiwanie portfela (passkeys albo MPC) zamiast jednego klucza na telefonie;
+- prywatny bucket z podpisanymi linkami zamiast publicznych nagrań.
 
 **Znane ograniczenia** (mówimy o nich wprost, bo jury ceni świadomość ograniczeń):
 
@@ -473,7 +477,10 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 - dostępność plików zależy od Supabase (integralność gwarantuje hash);
 - sprzedający nie może kwestionować zwrotu;
 - cena w SOL jest zmienna;
-- numer przesyłki nie jest weryfikowany.
+- numer przesyłki nie jest weryfikowany;
+- klucz portfela jest tylko na telefonie: utrata telefonu albo usunięcie aplikacji oznacza utratę środków;
+- nagrania leżą w publicznym buckecie, a ich ścieżki da się wyprowadzić z adresu transakcji (on-chain są tylko hashe);
+- nagrywanie otwarcia każdej paczki to dodatkowy wysiłek kupującego; to cena za brak pośrednika i mówimy o niej w pitchu.
 
 ---
 
@@ -490,3 +497,4 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 - **2026-10-03** — Harmonogram przesunięty: start nie wcześniej niż sob 23:00 (regulamin pkt 5). Do zgłoszenia dodane: nazwa zespołu i lista członków.
 - **2026-10-03** — Stary plan SellSol (`docs/KONTRAKT.md`, serwer REST, AI w Pythonie) usunięty. Kontraktem jest ten plik + IDL; zadania w `docs/zadania/`.
 - **2026-10-03** — `@anchor-lang/core` przypięty dokładnie do `1.1.2` (także w root `pnpm.overrides`), bo `^1.1.2` pobiera już 1.2.0, niezgodne z CLI 1.1.2. `packageManager: pnpm@9.15.9`; `pnpm install` tylko na hoście, nie w kontenerze (pnpm 12 w kontenerze blokuje build scripts i zapisuje pliki jako root).
+- **2026-10-03** — Specyfikacja UI w `docs/ui.md`. Na każdym ekranie transakcji jest karta „Co teraz?” (gdzie są środki, kto ma ruch, do kiedy, co się stanie, jeśli nikt nic nie zrobi). Przycisk `settle_expired` jest widoczny dla każdego, przed terminem zablokowany z odliczaniem, a odblokowuje się według zegara sieci (Clock sysvar), nie telefonu. Każda nieodwracalna operacja ma ekran zgody (`ConfirmSheet`), bo wbudowany portfel podpisuje w tle; przy zakupie widać akceptację weryfikatora. Sukces pokazujemy dopiero po `confirmed`. Werdykt pokazuje ścieżkę reguły `decide()`, a nie „AI zdecydowało”. W tekstach nie ma słów „gwarantowane”, „niezależny” ani „automatycznie”. Tylko tryb jasny, a telefony demo mają kolor roli. Wspólne komponenty UI w `app/src/ui/` i `app/src/components/` (O4).
