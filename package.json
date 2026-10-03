@@ -12,11 +12,12 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "npm test -w packages/shared && npm test -w packages/api-client",
+    "test": "npm test -w packages/shared && npm test -w packages/api-client && npm test -w server",
     "dev:server": "npm run dev -w server",
     "contract-test": "tsx scripts/contract-test.ts",
     "typecheck": "tsc -p packages/shared && tsc -p packages/api-client && tsc -p server && tsc -p scripts && npm run typecheck -w app",
-    "dev:app": "npm start -w app"
+    "dev:app": "npm start -w app",
+    "test:contract": "tsx scripts/run-contract-test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.1",
