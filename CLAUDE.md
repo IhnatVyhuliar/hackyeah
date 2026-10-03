@@ -366,7 +366,7 @@ Etykiety trzymamy w `packages/shared`.
 |---|---|
 | `anchor build` | buduje program (profil `demo`) |
 | `pnpm test:program` | buduje z `test-timeouts` i odpala testy na localnecie (Surfpool); w dev containerze |
-| `pnpm deploy:devnet` | przebudowuje bez `test-timeouts` i robi upgrade na devnecie (**tylko właściciel programu**; przy limitach publicznego RPC: `anchor deploy --provider.cluster <RPC Helius>`) |
+| `pnpm deploy:devnet` | przebudowuje bez `test-timeouts` i robi upgrade na devnecie (**tylko właściciel programu**). Przy limitach publicznego RPC: `DEPLOY_URL=<RPC Helius> pnpm deploy:devnet`. Nigdy samo `anchor deploy`: po `pnpm test:program` w `target/deploy` leży build z 5-sekundowymi terminami |
 | `pnpm sync-idl` | kopiuje `target/idl/*.json` i `target/types/*.ts` do `packages/shared`; commitujemy wynik |
 | `pnpm --filter app start` | Expo |
 | `pnpm --filter oracle dev` | wyrocznia |
