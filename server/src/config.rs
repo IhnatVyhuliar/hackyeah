@@ -118,7 +118,8 @@ impl Config {
                 Some(SolanaConfig {
                     rpc_url: var("RPC_URL").unwrap_or_else(|| "https://api.devnet.solana.com".into()),
                     cluster: var("CLUSTER").unwrap_or_else(|| "devnet".into()),
-                    arbiter: Pubkey::from_str(&arbiter).map_err(|_| format!("ARBITER_PUBKEY={arbiter}: niepoprawny adres"))?,
+                    arbiter: Pubkey::from_str(&arbiter)
+                        .map_err(|_| format!("ARBITER_PUBKEY={arbiter}: niepoprawny adres"))?,
                     webhook_secret: var("WEBHOOK_SECRET"),
                     poll_ms: num("SOLANA_POLL_MS", 5000)?,
                 })

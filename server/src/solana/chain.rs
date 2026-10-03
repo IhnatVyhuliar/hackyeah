@@ -41,8 +41,9 @@ impl RpcChain {
         let mut out = Vec::new();
         for chunk in keys.chunks(100) {
             let ids: Vec<String> = chunk.iter().map(Pubkey::to_string).collect();
-            let result =
-                self.call("getMultipleAccounts", json!([ids, { "encoding": "base64", "commitment": "confirmed" }])).await?;
+            let result = self
+                .call("getMultipleAccounts", json!([ids, { "encoding": "base64", "commitment": "confirmed" }]))
+                .await?;
             let values = result["value"].as_array().ok_or("getMultipleAccounts without value")?;
             for (key, account) in chunk.iter().zip(values) {
                 if account["owner"].as_str() == Some(program.as_str()) {
@@ -55,7 +56,8 @@ impl RpcChain {
 
     /// Every account of the program that starts with the Deal discriminator.
     pub async fn all_deals(&self) -> Result<Vec<(Pubkey, Vec<u8>)>, String> {
-        let filter = json!({ "memcmp": { "offset": 0, "bytes": B64.encode(Deal::DISCRIMINATOR), "encoding": "base64" } });
+        let filter =
+            json!({ "memcmp": { "offset": 0, "bytes": B64.encode(Deal::DISCRIMINATOR), "encoding": "base64" } });
         let params = json!([unbox_escrow::ID.to_string(),
                             { "encoding": "base64", "commitment": "confirmed", "filters": [filter] }]);
         let result = self.call("getProgramAccounts", params).await?;
@@ -73,8 +75,9 @@ impl RpcChain {
 
     /// Newest transaction touching `key`, for the Explorer link.
     pub async fn latest_signature(&self, key: &Pubkey) -> Result<Option<String>, String> {
-        let result =
-            self.call("getSignaturesForAddress", json!([key.to_string(), { "limit": 1, "commitment": "confirmed" }])).await?;
+        let result = self
+            .call("getSignaturesForAddress", json!([key.to_string(), { "limit": 1, "commitment": "confirmed" }]))
+            .await?;
         Ok(result[0]["signature"].as_str().map(str::to_string))
     }
 

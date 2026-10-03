@@ -1,15 +1,15 @@
 mod common;
 
+use anchor_lang::prelude::Pubkey;
+use common::fake_rpc::chain_deal;
 use common::fake_rpc::FakeRpc;
 use common::*;
 use reqwest::{Method, StatusCode};
-use anchor_lang::prelude::Pubkey;
 use serde_json::{json, Value};
-use common::fake_rpc::chain_deal;
+use sha2::{Digest, Sha256};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use unbox_escrow::state::{Deal as ChainDeal, DealStatus as ChainStatus};
-use sha2::{Digest, Sha256};
 
 pub const ARBITER: &str = "4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw";
 
@@ -101,7 +101,8 @@ async fn publish_freezes_listing() {
     let b = solana_backend(&rpc, "600000").await;
     let ania = linked(&b, "ania@demo.pl", &random_key()).await;
     let (_, v) = ania.call(Method::POST, "/api/listings/l-kurtka-levis/publish", None).await;
-    let (s, e) = ania.call(Method::PATCH, "/api/listings/l-kurtka-levis", Some(json!({ "title": "Inna kurtka" }))).await;
+    let (s, e) =
+        ania.call(Method::PATCH, "/api/listings/l-kurtka-levis", Some(json!({ "title": "Inna kurtka" }))).await;
     assert_eq!((s, e["error"]["code"].clone()), (StatusCode::CONFLICT, json!("INVALID_STATE")));
     let bytes = reqwest::get(v["metadataUri"].as_str().unwrap()).await.unwrap().bytes().await.unwrap();
     assert_eq!(hex::encode(Sha256::digest(&bytes)), v["listingHash"].as_str().unwrap());
@@ -198,7 +199,10 @@ async fn on_chain_purchase_ship_accept_is_mirrored() {
     let (_, deals) = m.bartek.call(Method::GET, "/api/deals?role=buyer", None).await;
     let d = &deals[0];
     assert_eq!((d["status"].clone(), d["payment"]["status"].clone()), (json!("Paid"), json!("secured")));
-    assert_eq!((d["payment"]["amountMinor"].clone(), d["payment"]["currency"].clone()), (json!(60_000_000), json!("SOL")));
+    assert_eq!(
+        (d["payment"]["amountMinor"].clone(), d["payment"]["currency"].clone()),
+        (json!(60_000_000), json!("SOL"))
+    );
     assert_eq!(d["buyer"]["id"], "u-bartek");
     let (_, l) = m.b.anon().call(Method::GET, "/api/listings/l-kurtka-levis", None).await;
     assert_eq!(l["status"], "Sold");
@@ -311,7 +315,10 @@ async fn chain_sync_endpoint_and_poller() {
     m.rpc.put_deal(&m.deal, &m.chain(ChainStatus::Listed, now()));
     let (s, v) = m.ania.call(Method::POST, &format!("/api/chain/sync/{}", m.deal), None).await;
     assert_eq!((s, v["published"].clone()), (StatusCode::OK, json!(true)));
-    assert_eq!(m.ania.call(Method::POST, &format!("/api/chain/sync/{}", random_key()), None).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(
+        m.ania.call(Method::POST, &format!("/api/chain/sync/{}", random_key()), None).await.0,
+        StatusCode::NOT_FOUND
+    );
     assert_eq!(m.ania.call(Method::POST, "/api/chain/sync/nope", None).await.0, StatusCode::BAD_REQUEST);
 
     // No webhook: the poller (200 ms) picks the purchase up by itself.

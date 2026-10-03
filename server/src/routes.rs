@@ -14,6 +14,7 @@ use crate::solana;
 use crate::state::AppState;
 use crate::upload;
 use crate::wallet;
+use anchor_lang::prelude::Pubkey;
 use axum::body::{Body, Bytes};
 use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
 use axum::http::{header, HeaderMap, StatusCode};
@@ -23,7 +24,6 @@ use axum::{Json, Router};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::json;
-use anchor_lang::prelude::Pubkey;
 use std::collections::HashMap;
 use std::str::FromStr;
 use unbox_escrow::constants::{DEAL_SEED, MAX_METADATA_URI_LEN};
@@ -268,7 +268,8 @@ async fn my_wallet(State(s): State<AppState>, AuthUser(u): AuthUser) -> Res {
         // PAYMENTS=solana: the balance is the wallet's SOL; "held" is what sits in escrow for this buyer.
         let balance = match &u.wallet_address {
             Some(a) => {
-                let key = Pubkey::from_str(a).map_err(|_| ApiError::internal("Zapisany adres portfela jest niepoprawny"))?;
+                let key =
+                    Pubkey::from_str(a).map_err(|_| ApiError::internal("Zapisany adres portfela jest niepoprawny"))?;
                 chain.balance(&key).await.map_err(|e| ApiError::upstream(format!("RPC: {e}")))?
             }
             None => 0,
@@ -520,12 +521,17 @@ async fn cancel_listing(State(s): State<AppState>, AuthUser(u): AuthUser, Path(i
 
 /// PAYMENTS=solana: freezes the listing and returns the `create_listing` arguments; the app signs them.
 async fn publish_listing(State(s): State<AppState>, AuthUser(u): AuthUser, Path(id): Path<String>) -> Res {
-    let sol = s.cfg.solana.clone().ok_or_else(|| ApiError::invalid_state("Publikacja w umowie działa tylko przy PAYMENTS=solana"))?;
+    let sol = s
+        .cfg
+        .solana
+        .clone()
+        .ok_or_else(|| ApiError::invalid_state("Publikacja w umowie działa tylko przy PAYMENTS=solana"))?;
     let wallet = u
         .wallet_address
         .clone()
         .ok_or_else(|| ApiError::invalid_state("Najpierw podłącz portfel (PUT /api/me/wallet-address)"))?;
-    let seller = Pubkey::from_str(&wallet).map_err(|_| ApiError::internal("Zapisany adres portfela jest niepoprawny"))?;
+    let seller =
+        Pubkey::from_str(&wallet).map_err(|_| ApiError::internal("Zapisany adres portfela jest niepoprawny"))?;
     let t = s.now();
     let base = s.cfg.public_base_url.clone();
     let mut conn = s.conn();
@@ -549,7 +555,9 @@ async fn publish_listing(State(s): State<AppState>, AuthUser(u): AuthUser, Path(
                 Pubkey::find_program_address(&[DEAL_SEED, seller.as_ref(), &deal_id.to_le_bytes()], &unbox_escrow::ID);
             let metadata_uri = format!("{base}/api/listings/{}/metadata.json", l.id);
             if metadata_uri.len() > MAX_METADATA_URI_LEN {
-                return Err(ApiError::internal("PUBLIC_BASE_URL jest za długi: metadata_uri musi mieć najwyżej 200 znaków"));
+                return Err(ApiError::internal(
+                    "PUBLIC_BASE_URL jest za długi: metadata_uri musi mieć najwyżej 200 znaków",
+                ));
             }
             l.onchain = Some(OnChainListing {
                 deal: deal.to_string(),
