@@ -5,7 +5,7 @@
 import { readFile, readdir, mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { decide } from "./decide.ts";
-import { analyze } from "./gemini.ts";
+import { analyzeWithRetry } from "./gemini.ts";
 import type { Complaint, ListingMetadata } from "./evidence.ts";
 import type { Verdict } from "./report.ts";
 
@@ -34,7 +34,7 @@ console.log(`[fixture] ${name}: ${photos.length} photos, packing ${(packing.leng
 await mkdir("out", { recursive: true });
 let failures = 0;
 for (let i = 1; i <= runs; i++) {
-  const res = await analyze({
+  const res = await analyzeWithRetry({
     metadata,
     photos,
     trackingNumber: expected.tracking_number ?? "",

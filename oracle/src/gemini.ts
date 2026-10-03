@@ -75,11 +75,24 @@ function listingText(m: ListingMetadata): string {
   ].join("\n");
 }
 
-// Ask the model to fill the report. Throws on any API or schema problem; the caller retries
-// or gives up, it never guesses a verdict.
-export async function analyze(input: AnalysisInput): Promise<AnalysisResult> {
-  const model = env("GEMINI_MODEL");
+// Model ids to try, in order: GEMINI_MODEL, then GEMINI_FALLBACK_MODELS (comma-separated).
+function modelChain(): string[] {
+  const fallbacks = (process.env.GEMINI_FALLBACK_MODELS ?? "").split(",").map((m) => m.trim()).filter(Boolean);
+  return [env("GEMINI_MODEL"), ...fallbacks.filter((m) => m !== process.env.GEMINI_MODEL)];
+}
+
+// 429 / 5xx: the model is overloaded or rate limited, so the next model in the chain may work.
+function isOverloaded(e: unknown): boolean {
+  const status = (e as { status?: number }).status;
+  return status === 429 || (status !== undefined && status >= 500);
+}
+
+// Ask the model to fill the report. Videos are uploaded once; transient failures (429, 5xx,
+// invalid JSON) are retried at most `retries` times, switching to a fallback model on overload.
+// Throws when every attempt fails: the caller never guesses a verdict.
+export async function analyzeWithRetry(input: AnalysisInput, retries = 2): Promise<AnalysisResult> {
   const ai = new GoogleGenAI({ apiKey: env("GEMINI_API_KEY") });
+  const models = modelChain();
   const timings: Record<string, number> = {};
   const t0 = Date.now();
 
@@ -91,18 +104,15 @@ export async function analyze(input: AnalysisInput): Promise<AnalysisResult> {
 
   const video = (f: typeof packing) => ({ type: "video" as const, uri: f.uri!, mime_type: f.mimeType! });
   const text = (t: string) => ({ type: "text" as const, text: t });
-
   const temperature = process.env.GEMINI_TEMPERATURE ? Number(process.env.GEMINI_TEMPERATURE) : undefined;
-  const t1 = Date.now();
-  const interaction = await ai.interactions.create({
-    model,
+  const request = {
     store: false,
     system_instruction: await systemPrompt(),
     generation_config: {
       ...(temperature !== undefined ? { temperature } : {}),
       thinking_level: process.env.GEMINI_THINKING_LEVEL || "medium",
     },
-    response_format: { type: "text", mime_type: "application/json", schema: MODEL_REPORT_SCHEMA },
+    response_format: { type: "text" as const, mime_type: "application/json", schema: MODEL_REPORT_SCHEMA },
     input: [
       text("1. Ogłoszenie:"),
       text(listingText(input.metadata)),
@@ -121,39 +131,44 @@ export async function analyze(input: AnalysisInput): Promise<AnalysisResult> {
       text(input.complaint.description),
       text("Wypełnij raport zgodnie z instrukcją i schematem."),
     ],
-  });
-  timings.model_ms = Date.now() - t1;
+  };
 
-  // Best effort cleanup; Files API also expires uploads on its own.
-  await Promise.allSettled([packing, unboxing].map((f) => ai.files.delete({ name: f.name! })));
-
-  const out = interaction.output_text;
-  if (!out) throw new Error("empty model output");
-  const report = parseModelReport(JSON.parse(out));
-  const u = interaction.usage;
-  const usage = u
-    ? {
-        input: u.total_input_tokens ?? 0,
-        output: u.total_output_tokens ?? 0,
-        thought: u.total_thought_tokens ?? 0,
-        total: u.total_tokens ?? 0,
-      }
-    : null;
-  timings.total_ms = Date.now() - t0;
-  return { report, model, promptVersion: PROMPT_VERSION, usage, timings };
-}
-
-// Retries transient failures (429, 5xx, invalid JSON) at most `retries` times.
-export async function analyzeWithRetry(input: AnalysisInput, retries = 2): Promise<AnalysisResult> {
+  let modelIdx = 0;
   let lastError: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      return await analyze(input);
-    } catch (e) {
-      lastError = e;
-      console.warn(`[gemini] attempt ${attempt + 1} failed: ${(e as Error).message}`);
-      if (attempt < retries) await sleep(3000 * (attempt + 1));
+  try {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const model = models[modelIdx]!;
+      const t1 = Date.now();
+      try {
+        // No SDK retries: an overloaded model tends to hang until the timeout instead of failing
+        // fast, so we cap each attempt and switch models below. A normal answer takes ~25 s.
+        const interaction = await ai.interactions.create({ model, ...request }, { maxRetries: 0, timeout: Number(process.env.GEMINI_TIMEOUT_MS || 90_000) });
+        timings.model_ms = Date.now() - t1;
+        const out = interaction.output_text;
+        if (!out) throw new Error("empty model output");
+        const report = parseModelReport(JSON.parse(out));
+        const u = interaction.usage;
+        const usage = u
+          ? {
+              input: u.total_input_tokens ?? 0,
+              output: u.total_output_tokens ?? 0,
+              thought: u.total_thought_tokens ?? 0,
+              total: u.total_tokens ?? 0,
+            }
+          : null;
+        timings.attempts = attempt + 1;
+        timings.total_ms = Date.now() - t0;
+        return { report, model, promptVersion: PROMPT_VERSION, usage, timings };
+      } catch (e) {
+        lastError = e;
+        console.warn(`[gemini] attempt ${attempt + 1} (${model}) failed: ${(e as Error).message.slice(0, 200)}`);
+        if (isOverloaded(e) && models.length > 1) modelIdx = (modelIdx + 1) % models.length;
+        else if (attempt < retries) await sleep(3000 * (attempt + 1));
+      }
     }
+    throw lastError;
+  } finally {
+    // Best effort cleanup; Files API also expires uploads on its own.
+    await Promise.allSettled([packing, unboxing].map((f) => ai.files.delete({ name: f.name! })));
   }
-  throw lastError;
 }
