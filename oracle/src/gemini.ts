@@ -5,7 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 import { MODEL_REPORT_SCHEMA, parseModelReport, type ModelReport, type TokenUsage } from "./report.ts";
 import type { Complaint, ListingMetadata } from "./evidence.ts";
 
-export const PROMPT_VERSION = "v1";
+export const PROMPT_VERSION = "v2";
 
 export interface AnalysisInput {
   metadata: ListingMetadata;
