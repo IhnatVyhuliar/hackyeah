@@ -29,7 +29,9 @@ export const config = {
   publicBaseUrl: (env.PUBLIC_BASE_URL ?? `http://localhost:${env.PORT ?? PORTS.server}`).replace(/\/$/, ''),
   validateResponses: !production,
   dataDir: path.resolve(env.DATA_DIR ?? path.join(here, '..', 'data')),
-  maxUploadBytes: 60 * 1024 * 1024,
+  // Liczba całkowita: przy ułamkowym limicie busboy obcina plik bez zdarzenia "limit".
+  maxUploadBytes: Math.floor(Number(env.MAX_UPLOAD_MB ?? 60) * 1024 * 1024),
+  aiHealthTtlMs: Number(env.AI_HEALTH_TTL_MS ?? 30_000),
 };
 
 export const paths = {

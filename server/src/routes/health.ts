@@ -3,14 +3,27 @@ import { z } from 'zod';
 import { HealthSchema } from '@unbox/shared';
 import { advanceClock } from '../clock';
 import { config } from '../config';
+import { dbOk } from '../db';
 import { ai } from '../disputes';
 import { parse, send } from '../errors';
 
 export const healthRoutes = new Hono();
 
-healthRoutes.get('/health', async (c) => {
-  const h = await ai.health();
-  return send(c, HealthSchema, { ok: h.ok, ai: h.detail, timeouts: config.timeoutsMode, version: '0.2.0' });
+// Stan serwisu AI z pamięci podręcznej: odświeżany w tle najwyżej co AI_HEALTH_TTL_MS,
+// więc health check nigdy nie czeka na AI.
+let aiStatus = config.ai === 'mock' ? 'mock' : 'http (jeszcze nie sprawdzono)';
+let aiCheckedAt = 0;
+let aiChecking = false;
+function refreshAiStatus() {
+  if (config.ai === 'mock' || aiChecking || Date.now() - aiCheckedAt < config.aiHealthTtlMs) return;
+  aiChecking = true;
+  void ai.health().then((h) => { aiStatus = h.detail; }).finally(() => { aiCheckedAt = Date.now(); aiChecking = false; });
+}
+
+healthRoutes.get('/health', (c) => {
+  refreshAiStatus();
+  const db = dbOk();
+  return send(c, HealthSchema, { ok: db, db: db ? 'ok' : 'error', ai: aiStatus, timeouts: config.timeoutsMode, version: '0.3.0' }, db ? 200 : 503);
 });
 
 // TEST-ONLY, poza API dla aplikacji: przesuwa zegar backendu, żeby testować terminy.

@@ -19,8 +19,7 @@ dealRoutes.use('/deals/*', requireAuth);
 
 /** Nagranie musi być wgrane wcześniej (POST /api/media) przez tę samą osobę. */
 function requireVideo(sha256: string, userId: string, what: string) {
-  const m = media.get(sha256);
-  if (!m || m.uploaderId !== userId || !m.mimeType.startsWith('video/'))
+  if (!media.ownedBy(sha256, userId, 'video/'))
     throw new ApiErr('VALIDATION', `${what}: najpierw wgraj nagranie (POST /api/media)`);
 }
 

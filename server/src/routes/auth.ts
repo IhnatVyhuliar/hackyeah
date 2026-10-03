@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { AuthResponseSchema, UserSchema, WalletSchema } from '@unbox/shared';
 import { type AuthEnv, checkPassword, requireAuth, signToken } from '../auth';
 import { users } from '../db';
+import { expireDueFor } from '../deals';
 import { ApiErr, parse, send } from '../errors';
 import { registerUser } from '../seed';
 import { walletOf } from '../wallet';
@@ -27,4 +28,8 @@ authRoutes.post('/auth/login', async (c) => {
 authRoutes.get('/me', requireAuth, (c) => send(c, UserSchema, c.get('user')));
 
 /** Saldo demo i historia (zabezpieczenia, wypłaty, zwroty). */
-authRoutes.get('/me/wallet', requireAuth, (c) => send(c, WalletSchema, walletOf(c.get('user').id)));
+authRoutes.get('/me/wallet', requireAuth, (c) => {
+  const id = c.get('user').id;
+  expireDueFor(id);                      // saldo zawsze po domknięciu transakcji, których termin minął
+  return send(c, WalletSchema, walletOf(id));
+});

@@ -23,8 +23,7 @@ function getListing(id: string): Listing {
 /** Zdjęcia muszą być wcześniej wgrane przez tego użytkownika (POST /api/media); URL ustala serwer. */
 function checkPhotos(photos: Photo[], userId: string): Photo[] {
   return photos.map((p) => {
-    const m = media.get(p.sha256);
-    if (!m || m.uploaderId !== userId || !m.mimeType.startsWith('image/'))
+    if (!media.ownedBy(p.sha256, userId, 'image/'))
       throw new ApiErr('VALIDATION', `Zdjęcie ${p.sha256.slice(0, 8)}… nie zostało wgrane przez Ciebie`);
     return { sha256: p.sha256, url: `${config.publicBaseUrl}/media/${p.sha256}` };
   });

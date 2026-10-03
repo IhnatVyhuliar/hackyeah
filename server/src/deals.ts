@@ -76,6 +76,13 @@ export function dealsOf(userId: string, role: 'buyer' | 'seller'): Deal[] {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+/** Domyka przeterminowane transakcje użytkownika (np. przed policzeniem salda w portfelu). */
+export function expireDueFor(userId: string) {
+  for (const d of docs.list('deal')) {
+    if ((d.buyerId === userId || d.sellerId === userId) && d.deadlineAt != null && now() >= d.deadlineAt) expireIfDue(d.id);
+  }
+}
+
 /** Domyka wszystkie transakcje po terminie (wywoływane cyklicznie). */
 export function sweepExpired(): number {
   let n = 0;

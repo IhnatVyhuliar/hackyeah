@@ -114,7 +114,10 @@ export const ConfirmReturnBodySchema = z.object({ returnQrSecret: Hex32Schema })
 
 // ---------- odpowiedzi złożone ----------
 export const AuthResponseSchema = z.object({ token: z.string(), user: UserSchema });
-export const HealthSchema = z.object({ ok: z.boolean(), ai: z.string(), timeouts: z.enum(['demo', 'prod']), version: z.string() });
+/** `ok` = backend i baza działają. `ai` = tryb i ostatni znany stan serwisu AI (bez odpytywania przy każdym wywołaniu). */
+export const HealthSchema = z.object({
+  ok: z.boolean(), db: z.enum(['ok', 'error']), ai: z.string(), timeouts: z.enum(['demo', 'prod']), version: z.string(),
+});
 
 // ---------- kontrakt backend ↔ wyrocznia (POST {AI_URL}/v1/disputes/analyze) ----------
 const EvidenceFile = z.object({ url: z.string(), sha256: Hex32Schema });
