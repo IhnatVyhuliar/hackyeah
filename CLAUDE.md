@@ -61,6 +61,7 @@ Odpowiadaj zespołowi **po polsku**. Kod, identyfikatory, commity i komentarze p
 - Aplikacja i wyrocznia **tylko składają transakcje**. Aplikacja może ukrywać przyciski niedozwolonych akcji, ale **nigdy nie jest jedynym strażnikiem reguły**. Jeśli dodajesz sprawdzenie w aplikacji, upewnij się, że program egzekwuje to samo.
 - **Wyrocznia** może tylko wywołać `resolve_dispute` z werdyktem `Seller` albo `Buyer`, wyłącznie w statusie `Disputed` i wyłącznie przed upływem `ORACLE_TIMEOUT`. Nie ma żadnej ścieżki, którą przelałaby środki komuś poza stronami.
 - **Brak instrukcji admina.** Nikt, także my, nie może przesunąć środków poza ścieżkami maszyny stanów.
+- `server/` (Rust) w trybie `PAYMENTS=solana` (domyślnym) tylko odbija stan programu: nie ma kluczy, niczego nie podpisuje i nie trzyma środków. Webhook Helius i poller to sygnał do ponownego odczytu kont `Deal` z RPC. `PAYMENTS=demo` (ledger w SQLite) służy wyłącznie testom i awaryjnemu demo offline.
 - Jeśli zadanie skłania Cię do przeniesienia reguły biznesowej poza program, **zatrzymaj się i zgłoś to użytkownikowi**.
 
 ---
@@ -275,6 +276,15 @@ Wygląd, teksty, stany i komponenty każdego ekranu, macierz „Co teraz?” dla
 - Polyfille na samym początku entry: `react-native-get-random-values`, `buffer`.
 - RPC ustawiasz w `EXPO_PUBLIC_RPC_URL`. Publiczny devnet ma limity zapytań; w razie potrzeby użyj darmowego RPC devnet, np. Helius.
 
+### Backend `server/` w trybie `PAYMENTS=solana` (kontrakt: `server/README.md`)
+
+- **Portfel:** po wygenerowaniu keypaira `PUT /api/me/wallet-address {address}`. Adres jest unikalny między kontami.
+- **Wystaw:** `POST /api/listings/{id}/publish` zamraża treść i zwraca argumenty `create_listing` (`deal`, `dealId`, `priceLamports`, `listingHash`, `metadataUri`, `arbiter`). Aplikacja podpisuje `create_listing`. `metadata.json` serwuje `server/` (`GET /api/listings/{id}/metadata.json`, bajty = `listingHash`).
+- **Po każdej transakcji** (kup, nadaj, odbierz, reklamuj, zwróć, „Odbierz środki”): `POST /api/chain/sync/{deal}`, żeby UI nie czekało na webhook.
+- **Przeglądaj:** `GET /api/listings` pokazuje tylko ogłoszenia widoczne on-chain. Stare akcje REST (`purchase`, `ship`, …) zwracają 409.
+- **Ceny w SOL:** `priceMinor` w lamportach, `currency = "SOL"`, maks. 0,1 SOL (limit `Minor` w `@unbox/shared`). Seed: kurtka 0,06, sukienka 0,03, Nike 0,09 SOL.
+- `PUBLIC_BASE_URL` trafia on-chain w `metadata_uri`, więc ustaw go **przed** publikacją, najlepiej na stały adres LAN.
+
 ### Granice modułów (żeby 3 osoby nie wchodziły sobie w drogę)
 
 - **`app/src/solana/`** to jedyne miejsce, które importuje web3/anchor. Wystawia funkcje typu `purchase(deal)`, `openDispute(...)` i `fetchDeals()`.
@@ -346,7 +356,7 @@ Etykiety trzymamy w `packages/shared`.
 ├── oracle/                    # wyrocznia Gemini + crank settle_expired
 │   ├── prompts/v1.md
 │   └── src/{watch, evidence, gemini, decide, resolve}.ts
-├── server/                    # Rust (axum + SQLite): konta, ogłoszenia, media
+├── server/                    # Rust (axum + SQLite): konta, ogłoszenia, media; PAYMENTS=solana odbija program
 ├── cli/                       # unbox-cli: demo bez telefonu, podpisuje z pliku keypaira (osobny crate)
 ├── scripts/                   # zasilenie portfeli demo, seed ogłoszeń, staging demo
 └── docs/                      # uzasadnienie, skrypt demo, materiały do pitchu
@@ -507,6 +517,8 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 - **2026-10-03** — Stary plan SellSol (`docs/KONTRAKT.md`, serwer REST, AI w Pythonie) usunięty. Kontraktem jest ten plik + IDL; zadania w `docs/zadania/`.
 - **2026-10-03** — `@anchor-lang/core` przypięty dokładnie do `1.1.2` (także w root `pnpm.overrides`), bo `^1.1.2` pobiera już 1.2.0, niezgodne z CLI 1.1.2. `packageManager: pnpm@9.15.9`; `pnpm install` tylko na hoście, nie w kontenerze (pnpm 12 w kontenerze blokuje build scripts i zapisuje pliki jako root).
 - **2026-10-03** — Specyfikacja UI w `docs/ui.md`. Na każdym ekranie transakcji jest karta „Co teraz?” (gdzie są środki, kto ma ruch, do kiedy, co się stanie, jeśli nikt nic nie zrobi). Przycisk `settle_expired` jest widoczny dla każdego, przed terminem zablokowany z odliczaniem, a odblokowuje się według zegara sieci (Clock sysvar), nie telefonu. Każda nieodwracalna operacja ma ekran zgody (`ConfirmSheet`), bo wbudowany portfel podpisuje w tle; przy zakupie widać akceptację weryfikatora. Sukces pokazujemy dopiero po `confirmed`. Werdykt pokazuje ścieżkę reguły `decide()`, a nie „AI zdecydowało”. W tekstach nie ma słów „gwarantowane”, „niezależny” ani „automatycznie”. Tylko tryb jasny, a telefony demo mają kolor roli. Wspólne komponenty UI w `app/src/ui/` i `app/src/components/` (O4).
+- **2026-10-04** — `server/` podłączony do programu trybem `PAYMENTS=solana` (domyślny): publikacja ogłoszeń, odbicie kont `Deal` z webhooka Helius i pollera, saldo SOL z RPC. Ledger w SQLite zostaje tylko w `PAYMENTS=demo`.
+- **2026-10-04** — Ceny w SOL (lamporty), seed 0,06/0,03/0,09 SOL. Logowanie do `server/` zostaje, a portfel jest przypisany do konta adresem.
 - **2026-10-04** — Konto `Deal`: pola `String` przeniesione na koniec, więc `status` ma stały offset 152 (`STATUS_OFFSET`) do filtrów `memcmp`. IDL v0 w `packages/shared/idl/`; program z profilem `demo` wdrożony na devnet pod tym samym adresem.
 - **2026-10-04** — Feature `test-timeouts` (wszystkie terminy po 5 s) tylko do testów programu; zegar Surfpoola przesuwamy `surfnet_timeTravel`. Deploy zawsze przebudowuje bez tej flagi.
 - **2026-10-04** — `unbox-cli` (`cli/`) jako zapasowe demo bez telefonu: loguje się do `server/`, podpisuje kluczem z pliku osoby, która je uruchamia, i sam sprawdza hash `metadata.json` przed zakupem.
