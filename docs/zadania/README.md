@@ -7,9 +7,9 @@ Specyfikacja jest w `CLAUDE.md` (§4 program, §5 wyrocznia, §6 aplikacja) oraz
 | # | Rola | Plik | Twoje pliki |
 |---|---|---|---|
 | 1 | Program + testy | [1-program.md](1-program.md) | `Anchor.toml`, `Cargo.toml`, `programs/`, `tests/`, skrypty `sync-idl`/`test` w root `package.json`, stała `PROGRAM_ID` |
-| 2 | App: sprzedający | [2-app-sprzedajacy.md](2-app-sprzedajacy.md) | trasy sprzedającego (niżej), `app/src/components/QrCard.tsx`, `app/src/components/printQrCard.ts` |
-| 3 | App: kupujący | [3-app-kupujacy.md](3-app-kupujacy.md) | trasy kupującego (niżej) |
-| 4 | App shell | [4-app-shell.md](4-app-shell.md) | root monorepo, `packages/shared` (poza `idl/`), `app/src/{solana,storage,media}`, layouty, Portfel, Szczegóły transakcji |
+| 2 | App: sprzedający | [2-app-sprzedajacy.md](2-app-sprzedajacy.md) | trasy sprzedającego (niżej), `app/src/components/{QrCard,DealRow,RecordingChecklist}.tsx`, `app/src/components/printQrCard.ts` |
+| 3 | App: kupujący | [3-app-kupujacy.md](3-app-kupujacy.md) | trasy kupującego (niżej), `app/src/components/ListingCard.tsx` |
+| 4 | App shell | [4-app-shell.md](4-app-shell.md) | root monorepo, `packages/shared` (poza `idl/`), `app/src/{solana,storage,media,ui}`, pozostałe komponenty z `docs/ui.md` §4, layouty, Portfel, Szczegóły transakcji |
 | 5 | Wyrocznia | [5-wyrocznia.md](5-wyrocznia.md) | `oracle/` |
 | 6 | Pitch i demo | [6-pitch-demo.md](6-pitch-demo.md) | `README.md`, `docs/` (poza `docs/zadania/`), `scripts/` |
 
@@ -34,6 +34,8 @@ app/app/dev.tsx                          O4  ukryte menu deweloperskie
 ```
 
 Ekran „Szczegóły transakcji” (O4) nie zawiera logiki sprzedającego ani kupującego. Przyciski akcji z kamerą prowadzą do tras O2 i O3.
+
+Wygląd, teksty i stany wszystkich ekranów opisuje [`docs/ui.md`](../ui.md).
 
 ## Przekazania
 

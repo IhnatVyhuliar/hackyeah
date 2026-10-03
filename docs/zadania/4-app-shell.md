@@ -12,13 +12,13 @@ Ryzyko nr 1 projektu to Anchor + web3.js w React Native. Twój spike rozstrzyga 
 ## Twoje pliki
 - Root: `package.json`, `pnpm-workspace.yaml`, `.npmrc`, `.gitignore`.
 - `packages/shared/**` poza `idl/` i wartością `PROGRAM_ID` (te zmienia O1).
-- `app/` (scaffold), `app/src/{solana,storage,media}/**`, `app/src/components/{StatusBadge,Countdown,ExplorerLink}.tsx`, `app/.env.example`.
+- `app/` (scaffold), `app/src/{solana,storage,media,ui}/**`, wspólne komponenty w `app/src/components/` (lista z właścicielami w `docs/ui.md` §4), `app/.env.example`.
 - Trasy: `app/app/_layout.tsx`, `app/app/(tabs)/_layout.tsx`, `app/app/(tabs)/wallet.tsx`, `app/app/deal/[deal].tsx`, `app/app/dev.tsx`.
 
 **Nie dotykasz:** tras O2 i O3 (lista w `docs/zadania/README.md`), `programs/`, `tests/`, `oracle/`, `scripts/`.
 
 ## Przeczytaj najpierw
-`CLAUDE.md` §3 (przepływ), §4 (instrukcje, statusy, QR), §6 (cała aplikacja, granice modułów, nagrania, storage, etykiety), §7 (stack, struktura). `docs/zadania/README.md` (trasy, konwencje, wektory). `docs/zadania/1-program.md` (tabela argumentów instrukcji: pisz pod nią, zanim pojawi się IDL v0).
+`CLAUDE.md` §3 (przepływ), §4 (instrukcje, statusy, QR), §6 (cała aplikacja, granice modułów, nagrania, storage, etykiety), §7 (stack, struktura). `docs/zadania/README.md` (trasy, konwencje, wektory). `docs/zadania/1-program.md` (tabela argumentów instrukcji: pisz pod nią, zanim pojawi się IDL v0). `docs/ui.md` (§3–4 theme i komponenty wspólne, §5 zgoda, cykl operacji i czas sieci, §6.6, §6.12–6.13, §7 macierz „Co teraz?”, §8 werdykt, §9 błędy).
 
 ## Stack i setup
 Node 24, pnpm, Expo (najnowsze SDK) + expo-router + TypeScript, Expo Go na telefonach, `@anchor-lang/core` 1.1.2, `@solana/web3.js` 1.99.0, `@noble/hashes`, `bs58`, `react-native-get-random-values`, `buffer`. Moduły Expo: `expo-camera`, `expo-file-system`, `expo-crypto`, `expo-secure-store` (wszystkie działają w Expo Go).
@@ -57,7 +57,7 @@ Node 24, pnpm, Expo (najnowsze SDK) + expo-router + TypeScript, Expo Go na telef
 - [ ] `app/src/solana/program.ts`: `Connection(EXPO_PUBLIC_RPC_URL, "confirmed")`, provider z własnym portfelem, `Program` z IDL z shared.
 - [ ] `app/src/solana/deals.ts`: `fetchDeals({ status?, seller?, buyer? })` (`memcmp` na `seller` i `buyer`, status filtrowany w kliencie, chyba że O1 przeniesie stringi na koniec), `fetchDeal(pk)`. Zwraca prosty typ `DealView` (stringi base58, hashe w hex, liczby, status jako string, `deadline`).
 - [ ] `app/src/solana/actions.ts`: po jednej funkcji na instrukcję: `createListing`, `cancelListing`, `purchase`, `markShipped`, `acceptDelivery`, `openDispute`, `markReturned`, `confirmReturn`, `settleExpired`. Zwracają sygnaturę. Błędy Anchora mapujesz na komunikaty PL bez żargonu.
-- [ ] `app/src/storage/`: `uploadFile(path, localUri, contentType)` dla wideo i zdjęć (REST Supabase `POST /storage/v1/object/unbox/<path>` z `x-upsert: false` przez upload binarny z `expo-file-system`, bez ładowania pliku do JS), `uploadBytes(path, bytes, contentType)` dla JSON-ów, `downloadBytes(url)`, `publicUrl(path)`.
+- [ ] `app/src/storage/`: `uploadFile(path, localUri, contentType, onProgress?)` dla wideo i zdjęć (postęp do paska w `TxProgress`, `docs/ui.md` §5.3) (REST Supabase `POST /storage/v1/object/unbox/<path>` z `x-upsert: false` przez upload binarny z `expo-file-system`, bez ładowania pliku do JS), `uploadBytes(path, bytes, contentType)` dla JSON-ów, `downloadBytes(url)`, `publicUrl(path)`.
 - [ ] `app/src/media/`:
   - `Recorder`: `CameraView` w trybie wideo, 720p, `recordAsync({ maxDuration: 120 })`, bez dźwięku, z callbackiem `onQrScanned` (jeśli spike O3 potwierdzi skan w trakcie nagrywania);
   - `QrScanner` (fallback po nagraniu i skan zwrotu u sprzedającego);
@@ -65,11 +65,12 @@ Node 24, pnpm, Expo (najnowsze SDK) + expo-router + TypeScript, Expo Go na telef
   - obsługa uprawnień do kamery.
 - [ ] `app/.env.example`: `EXPO_PUBLIC_RPC_URL`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
 - [ ] Tymczasowy ekran testowy, który woła każdą funkcję. Usuń go przed K4.
+- [ ] Prymitywy UI z `docs/ui.md` §3–4 (O2 i O3 ich potrzebują): `app/src/ui/{theme,format}.ts`, `Screen`, `Button`, `Card`, `Notice`, `TxProgress`, `SuccessView`, `StatusBadge`, `Countdown`, `ExplorerLink`, `ConfirmSheet`, `BalanceGuard`, `RoleBanner`, `RulesSheet`. Do tego `app/src/solana/clock.ts` (`networkNow()` z Clock sysvar, §5.4), bo z niego liczą się wszystkie terminy.
 
 ### P0. Nawigacja i ekrany wspólne (do K2 08:00, dopracowanie do K3)
 - [ ] `(tabs)/_layout.tsx`: Przeglądaj, Wystaw, Sprzedaże, Zakupy, Portfel. Puste pliki tras O2 i O3 z nagłówkiem, żeby nikt nie tworzył ich równolegle.
 - [ ] **Portfel**: adres (kopiuj), saldo w SOL, „Doładuj testowe SOL”, dyskretny link do Explorera. Długie przytrzymanie adresu otwiera `/dev`: import klucza demo, podgląd RPC i `PROGRAM_ID`, „tylko devnet”.
-- [ ] **Szczegóły transakcji** (`deal/[deal].tsx`):
+- [ ] **Szczegóły transakcji** (`deal/[deal].tsx`, układ w `docs/ui.md` §6.6; `nextStep.ts` + `NextStepCard` wg §7, `Timeline`, `VerdictCard` wg §8):
   - etykieta statusu z shared i oś statusów (ścieżka przejść z §4, bieżący podświetlony);
   - odliczanie do terminu (`status_changed_at + TIMEOUTS`);
   - przycisk „Odbierz środki” (`settleExpired`) dla **każdego** użytkownika, gdy termin minął i status jest w tabeli `settle_expired`;

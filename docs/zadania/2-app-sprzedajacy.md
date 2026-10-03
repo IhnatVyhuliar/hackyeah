@@ -17,7 +17,7 @@ Użytkownik nie zna krypto: piszesz „środki zabezpieczone w umowie”, nie �
 **Nie dotykasz:** `app/src/{solana,storage,media}` (O4; brakującą funkcję zgłaszasz O4), tras O3 i O4, `packages/shared` (prośby do O4), `programs/`, `oracle/`.
 
 ## Przeczytaj najpierw
-`CLAUDE.md` §1 (język UI), §3 kroki 1–4 i 9–10, §4 (`create_listing`, `cancel_listing`, `mark_shipped`, `confirm_return`, QR), §6 (nagrania, storage, kolejność „najpierw upload, potem transakcja”). `docs/zadania/README.md` (trasy, `ListingMetadata`, otwarte kwestie). `docs/zadania/4-app-shell.md` (API modułów).
+`CLAUDE.md` §1 (język UI), §3 kroki 1–4 i 9–10, §4 (`create_listing`, `cancel_listing`, `mark_shipped`, `confirm_return`, QR), §6 (nagrania, storage, kolejność „najpierw upload, potem transakcja”). `docs/zadania/README.md` (trasy, `ListingMetadata`, otwarte kwestie). `docs/zadania/4-app-shell.md` (API modułów). `docs/ui.md` (§1–5, §6.3, §6.4, §6.7, §6.11, §9: wygląd, teksty i stany Twoich ekranów).
 
 ## Stack i setup
 Expo + expo-router + TS, Expo Go. Do karty QR: `qrcode` (czysty JS, generuje SVG) + `react-native-svg` (`SvgXml`) na ekranie, `expo-print` i `expo-sharing` do druku albo PDF-a. Zdjęcia: `expo-image-picker` (`launchCameraAsync`, tylko aparat). Wszystko działa w Expo Go, ale nowe zależności i tak zgłoś zespołowi.

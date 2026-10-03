@@ -17,7 +17,7 @@ To Twoje ekrany pokazujemy jury na żywo (transakcja A: otwarcie paczki z plamą
 **Nie dotykasz:** `app/src/{solana,storage,media}` (O4), tras O2 i O4, `packages/shared` (prośby do O4), `programs/`, `oracle/`.
 
 ## Przeczytaj najpierw
-`CLAUDE.md` §1 (język UI), §3 kroki 2 i 5–9, §4 (`purchase`, `accept_delivery`, `open_dispute`, `mark_returned`, QR), §6 (nagrania, spike kamery, storage). `docs/zadania/README.md` (trasy, `Complaint`, otwarte kwestie). `docs/zadania/4-app-shell.md` (API modułów).
+`CLAUDE.md` §1 (język UI), §3 kroki 2 i 5–9, §4 (`purchase`, `accept_delivery`, `open_dispute`, `mark_returned`, QR), §6 (nagrania, spike kamery, storage). `docs/zadania/README.md` (trasy, `Complaint`, otwarte kwestie). `docs/zadania/4-app-shell.md` (API modułów). `docs/ui.md` (§1–5, §6.1, §6.2, §6.5, §6.8–6.10, §9: wygląd, teksty i stany Twoich ekranów).
 
 ## Stack i setup
 Expo + expo-router + TS, Expo Go, `expo-camera`. Kartę QR zwrotu bierzesz z `app/src/components/QrCard.tsx` (O2).
