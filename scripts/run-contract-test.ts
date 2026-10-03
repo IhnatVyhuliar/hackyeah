@@ -34,7 +34,7 @@ const url = `http://127.0.0.1:${port}`;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unbox-contract-'));
 const child = spawn(bin, [], {
   stdio: ['ignore', 'ignore', 'inherit'],
-  env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, AI: 'mock', MOCK_AI_DELAY_MS: '300', AI_RETRY_MS: '100',
+  env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, AI: 'mock', PAYMENTS: 'demo', MOCK_AI_DELAY_MS: '300', AI_RETRY_MS: '100',
          AI_MAX_ATTEMPTS: '2', ENABLE_DEV_CLOCK: '1', NODE_ENV: 'test', QUIET: '1', PUBLIC_BASE_URL: url, JWT_SECRET: '' },
 });
 let code = 1;

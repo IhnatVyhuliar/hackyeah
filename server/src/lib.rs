@@ -1,5 +1,4 @@
-//! unbox — backend sklepu: HTTP API (axum), SQLite (rusqlite), demo-płatności, ocena reklamacji.
-//! Niezależny od blockchaina.
+//! unbox — shop backend: HTTP API (axum), SQLite, media. PAYMENTS=solana mirrors the unbox_escrow program; PAYMENTS=demo keeps the demo ledger.
 
 pub mod ai;
 pub mod auth;
@@ -12,6 +11,7 @@ pub mod machine;
 pub mod model;
 pub mod routes;
 pub mod seed;
+pub mod solana;
 pub mod state;
 pub mod upload;
 pub mod wallet;
@@ -31,6 +31,11 @@ pub async fn build(cfg: config::Config) -> Result<(axum::Router, state::AppState
 
 /// Zadania w tle: domykanie transakcji po terminie i wznowienie przerwanych ocen.
 pub fn spawn_background(state: &state::AppState) {
+    if state.cfg.payments == config::PaymentsMode::Solana {
+        // No sweep and no dispute analysis: deadlines and verdicts are enforced on-chain.
+        solana::indexer::spawn_poller(state);
+        return;
+    }
     disputes::resume_pending(state);
     let s = state.clone();
     tokio::spawn(async move {

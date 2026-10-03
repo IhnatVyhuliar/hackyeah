@@ -38,6 +38,9 @@ impl ApiError {
     pub fn insufficient_funds() -> Self {
         Self::new(StatusCode::CONFLICT, "INSUFFICIENT_FUNDS", "Za mało środków na saldzie")
     }
+    pub fn upstream(m: impl Into<String>) -> Self {
+        Self::new(StatusCode::BAD_GATEWAY, "UPSTREAM", m)
+    }
     pub fn internal(m: impl Into<String>) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL", m)
     }

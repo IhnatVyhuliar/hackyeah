@@ -1,12 +1,34 @@
 //! Konfiguracja z env. Bez wartości sekretów w repo.
 
 use crate::machine::{Timeouts, TIMEOUTS_DEMO, TIMEOUTS_PROD};
+use anchor_lang::prelude::Pubkey;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AiMode {
     Mock,
     Http,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PaymentsMode {
+    /// Demo ledger in SQLite (offline demo and the original test suite).
+    Demo,
+    /// Money and deal status live in the unbox_escrow program; the server only mirrors them.
+    Solana,
+}
+
+#[derive(Clone, Debug)]
+pub struct SolanaConfig {
+    pub rpc_url: String,
+    /// "devnet" or anything else (Explorer links then use a custom cluster URL).
+    pub cluster: String,
+    /// Oracle key that new listings name as the arbiter (ORACLE_PUBKEY of person 5).
+    pub arbiter: Pubkey,
+    /// Helius sends it back verbatim in the Authorization header.
+    pub webhook_secret: Option<String>,
+    pub poll_ms: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -29,6 +51,8 @@ pub struct Config {
     pub public_base_url: String,
     pub data_dir: PathBuf,
     pub max_upload_bytes: u64,
+    pub payments: PaymentsMode,
+    pub solana: Option<SolanaConfig>,
 }
 
 fn var(name: &str) -> Option<String> {
@@ -82,6 +106,25 @@ impl Config {
             var("DATA_DIR").map(PathBuf::from).unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("data"));
         let jwt_secret = jwt_secret(&data_dir, production)?;
         let max_upload_mb: f64 = num("MAX_UPLOAD_MB", 60.0)?;
+        let payments = match var("PAYMENTS").as_deref().unwrap_or("solana") {
+            "solana" => PaymentsMode::Solana,
+            "demo" => PaymentsMode::Demo,
+            other => return Err(format!("PAYMENTS={other}: dozwolone solana|demo")),
+        };
+        let solana = match payments {
+            PaymentsMode::Demo => None,
+            PaymentsMode::Solana => {
+                let arbiter = var("ARBITER_PUBKEY").ok_or("PAYMENTS=solana wymaga ARBITER_PUBKEY (klucz wyroczni)")?;
+                Some(SolanaConfig {
+                    rpc_url: var("RPC_URL").unwrap_or_else(|| "https://api.devnet.solana.com".into()),
+                    cluster: var("CLUSTER").unwrap_or_else(|| "devnet".into()),
+                    arbiter: Pubkey::from_str(&arbiter)
+                        .map_err(|_| format!("ARBITER_PUBKEY={arbiter}: niepoprawny adres"))?,
+                    webhook_secret: var("WEBHOOK_SECRET"),
+                    poll_ms: num("SOLANA_POLL_MS", 5000)?,
+                })
+            }
+        };
         Ok(Self {
             port,
             production,
@@ -104,6 +147,8 @@ impl Config {
             data_dir,
             // Liczba całkowita bajtów (ułamkowe MB są zaokrąglane w dół).
             max_upload_bytes: (max_upload_mb * 1024.0 * 1024.0).floor() as u64,
+            payments,
+            solana,
         })
     }
 

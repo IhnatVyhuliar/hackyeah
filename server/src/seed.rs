@@ -2,6 +2,7 @@
 //! więc restart serwera niczego nie zmienia.
 
 use crate::auth::hash_password;
+use crate::config::PaymentsMode;
 use crate::db;
 use crate::error::ApiResult;
 use crate::model::*;
@@ -13,13 +14,24 @@ pub const DEMO_PASSWORD: &str = "demo1234";
 pub const DEMO_START_BALANCE_MINOR: i64 = 100_000;
 
 pub async fn register_user(state: &AppState, id: &str, email: &str, name: &str, password: &str) -> ApiResult<User> {
-    let user = User { id: id.into(), email: email.to_lowercase(), name: name.into(), created_at: state.now() };
+    let user = User {
+        id: id.into(),
+        email: email.to_lowercase(),
+        name: name.into(),
+        created_at: state.now(),
+        wallet_address: None,
+    };
     let hash = hash_password(password.to_string()).await?;
     let now = state.now();
     let mut conn = state.conn();
+    let demo_ledger = state.cfg.payments == PaymentsMode::Demo;
     db::tx(&mut conn, |c| {
         db::user_insert(c, &user, &hash)?;
-        wallet::top_up(c, &user.id, DEMO_START_BALANCE_MINOR, now)
+        // PAYMENTS=solana: the balance is the wallet's SOL on-chain; there is no ledger to top up.
+        if demo_ledger {
+            wallet::top_up(c, &user.id, DEMO_START_BALANCE_MINOR, now)?;
+        }
+        Ok(())
     })?;
     Ok(user)
 }
@@ -38,7 +50,10 @@ fn categories() -> Vec<Category> {
     .collect()
 }
 
-fn listings(t: Unix) -> Vec<Listing> {
+fn listings(t: Unix, sol: bool) -> Vec<Listing> {
+    // Devnet prices stay under 0.1 SOL, the `Minor` limit of @unbox/shared.
+    let currency = if sol { "SOL" } else { "PLN" };
+    let amount = |pln: i64, lamports: i64| if sol { lamports } else { pln };
     let seller = Party { id: "u-ania".into(), name: "Ania Kowalska".into() };
     let mk = |id: &str,
               title: &str,
@@ -61,10 +76,11 @@ fn listings(t: Unix) -> Vec<Listing> {
         defects: defects.iter().map(|s| s.to_string()).collect(),
         photos: vec![],
         price_minor: price,
-        currency: "PLN".into(),
+        currency: currency.into(),
         status: ListingStatus::Listed,
         created_at: t,
         updated_at: t,
+        onchain: None,
     };
     vec![
         mk(
@@ -76,7 +92,7 @@ fn listings(t: Unix) -> Vec<Listing> {
             "Levi's",
             "M",
             &["Lekkie przetarcie na lewym mankiecie"],
-            12_000,
+            amount(12_000, 60_000_000),
         ),
         mk(
             "l-sukienka-zara",
@@ -87,7 +103,7 @@ fn listings(t: Unix) -> Vec<Listing> {
             "Zara",
             "S",
             &[],
-            6_000,
+            amount(6_000, 30_000_000),
         ),
         mk(
             "l-sneakersy-nike",
@@ -98,7 +114,7 @@ fn listings(t: Unix) -> Vec<Listing> {
             "Nike",
             "42",
             &["Zabrudzona podeszwa"],
-            18_000,
+            amount(18_000, 90_000_000),
         ),
     ]
 }
@@ -123,7 +139,7 @@ pub async fn seed(state: &AppState, reset: bool) -> ApiResult<()> {
         for cat in categories() {
             db::doc_put(c, "category", &cat.id, &cat)?;
         }
-        for l in listings(now) {
+        for l in listings(now, state.cfg.payments == PaymentsMode::Solana) {
             db::doc_put(c, "listing", &l.id, &l)?;
         }
         Ok(())

@@ -1,6 +1,6 @@
 # unbox — backend sklepu (`server/`)
 
-**Backend: Rust + Axum + SQLite.** Zwykły backend HTTP: **aplikacja → REST API → SQLite / pliki / serwis AI**. Backend jest źródłem prawdy dla stanu transakcji i demo-płatności. Bez blockchaina.
+**Backend: Rust + Axum + SQLite.** Zwykły backend HTTP: **aplikacja → REST API → SQLite / pliki / serwis AI**. W domyślnym trybie `PAYMENTS=solana` backend **nie jest źródłem prawdy o pieniądzach**: środki i stan transakcji trzyma program `unbox_escrow`, a backend tylko odbija w SQLite stan kont `Deal` odczytany przez RPC (szczegóły niżej). Źródłem prawdy dla stanu transakcji i demo-płatności jest wyłącznie w trybie `PAYMENTS=demo`.
 
 - Rust 1.95 (`rust-toolchain.toml` w root repo), `axum` 0.8 + `tokio`, `rusqlite` (wbudowane SQLite, WAL), `serde`/`serde_json`, `jsonwebtoken` (HS256), `bcrypt`, `sha2`, `reqwest` (rustls), `tracing`.
 - Samodzielny crate: `server/Cargo.toml` ma własny `[workspace]`, więc nie należy do root workspace'u Cargo (`programs/*`).
@@ -10,7 +10,8 @@
 
 ```bash
 cd server
-cargo run                                   # http://localhost:4000, AI=mock, baza w server/data/unbox.db
+ARBITER_PUBKEY=<klucz wyroczni> cargo run  # domyślnie PAYMENTS=solana (wymaga ARBITER_PUBKEY), http://localhost:4000
+PAYMENTS=demo cargo run                     # demo offline: ledger w SQLite, baza w server/data/unbox.db
 cargo run -- seed-reset                     # czyści bazę, zakłada dane demo i kończy
 cargo test                                  # testy jednostkowe + integracyjne (osobne procesy, bazy tymczasowe)
 cargo clippy --all-targets -- -D warnings
@@ -19,7 +20,7 @@ cargo fmt -- --check
 
 Z root repo: `pnpm dev:server`, `pnpm test:backend`, `pnpm test:contract`. Zmienne ustawiasz w powłoce (`cargo run` nie wczytuje `.env`); wzór i opis: `server/.env.example`.
 
-Na Windows z włączonym Smart App Control niepodpisane `rustc`/`gcc` są blokowane. Wtedy budujemy w kontenerze, np. `docker run --rm -v "$PWD/server:/work" -w /work rust:1.95-slim cargo test` (do `clippy`/`fmt`: `rustup component add clippy rustfmt`).
+Na Windows z włączonym Smart App Control niepodpisane `rustc`/`gcc` są blokowane. Wtedy budujemy w kontenerze, montując **całe repo** (`server/` zależy od `../programs/unbox_escrow`), np. z root repo: `docker run --rm -v "$PWD":/work -w /work/server rust:1.95-slim cargo test` (do `clippy`/`fmt`: `rustup component add clippy rustfmt`). Montaż samego `server/` przestał działać.
 
 Telefon nie widzi `localhost`: ustaw w aplikacji `EXPO_PUBLIC_API_URL=http://<IP-laptopa>:4000` albo adres tunelu, a w backendzie `PUBLIC_BASE_URL` na ten sam adres (z niego wyrocznia pobiera nagrania).
 
@@ -41,6 +42,45 @@ Telefon nie widzi `localhost`: ustaw w aplikacji `EXPO_PUBLIC_API_URL=http://<IP
 | `QUIET` / `RUST_LOG` | — | poziom logów (`tracing`) |
 
 Zwykły start seeduje tylko pustą bazę, więc restart niczego nie zmienia.
+
+## Tryb `PAYMENTS=solana` (domyślny)
+
+Pieniądze i reguły są w programie `unbox_escrow` (CLAUDE.md §2). Backend nie ma kluczy, niczego nie podpisuje
+i nie zmienia stanu pieniędzy: odbija w SQLite stan kont `Deal` odczytany przez RPC. Webhook Helius i poller
+(`SOLANA_POLL_MS`) to tylko sygnał „przeczytaj ponownie”; payloadowi nie ufamy.
+
+| Krok | Aplikacja | Backend |
+|---|---|---|
+| Portfel | generuje keypair, `PUT /api/me/wallet-address {address}` | mapuje adres ↔ konto (unikalny) |
+| Wystaw | `POST /api/listings/{id}/publish` → podpisuje `create_listing` z odpowiedzi | zamraża treść, serwuje `GET /api/listings/{id}/metadata.json` (bajty = `listingHash`) |
+| Kup / nadaj / odbierz / reklamuj / zwróć / „Odbierz środki” | podpisuje instrukcję programu, potem `POST /api/chain/sync/{deal}` | odczytuje konto i aktualizuje `listing`/`deal` |
+| Przeglądaj, szczegóły | `GET /api/listings`, `GET /api/deals/{id}` | tylko ogłoszenia widoczne on-chain; `payment.currency = "SOL"`, kwoty w lamportach, `onchain.transactions[].explorerUrl` |
+| Portfel | `GET /api/me/wallet` | saldo SOL z RPC, `heldMinor` = środki w escrow, `address` |
+
+Stare `POST /api/listings/{id}/purchase` i `POST /api/deals/{id}/{ship|accept|dispute|return|confirm-return|settle}`
+zwracają w tym trybie 409. Spory rozstrzyga wyrocznia (`oracle/`) instrukcją `resolve_dispute`.
+
+`PAYMENTS=demo`: dawny ledger w SQLite. Używają go `cargo test`, `pnpm test:contract` i awaryjne demo offline.
+
+| Zmienna | Domyślnie | Znaczenie |
+|---|---|---|
+| `PAYMENTS` | `solana` | `solana` albo `demo` |
+| `RPC_URL` | `https://api.devnet.solana.com` | RPC devnet (najlepiej Helius; URL z kluczem nie trafia do `/api/health`) |
+| `CLUSTER` | `devnet` | do linków Solana Explorer |
+| `ARBITER_PUBKEY` | — (wymagane w `solana`) | klucz wyroczni, arbiter nowych ogłoszeń |
+| `WEBHOOK_SECRET` | puste | wartość `authHeader` webhooka Helius |
+| `SOLANA_POLL_MS` | `5000` | co ile poller czyta `getProgramAccounts` |
+
+### Webhook Helius (devnet)
+1. Tunel do portu 4000: `docker run --rm --network host cloudflare/cloudflared:latest tunnel --no-autoupdate --url http://localhost:4000`
+2. Webhook (URL tunelu zmienia się po restarcie, więc zaktualizuj go przez `PUT /v0/webhooks/{id}`):
+       curl -X POST "https://api.helius.xyz/v0/webhooks?api-key=$HELIUS_API_KEY" -H 'Content-Type: application/json' \
+         -d '{"webhookURL":"https://<tunel>/api/webhooks/helius","transactionTypes":["ANY"],
+              "accountAddresses":["CEoTTEq46mxFrNqPu9EbpFbDshsrSTZV9GB14XPT1Nyq"],
+              "webhookType":"rawDevnet","authHeader":"<WEBHOOK_SECRET>"}'
+3. Bez tunelu wszystko działa przez poller, z opóźnieniem `SOLANA_POLL_MS`.
+
+Build: `server/` zależy od `../programs/unbox_escrow`, więc w kontenerze montuj całe repo, nie sam `server/`.
 
 ## Konta demo (hasło `demo1234`, saldo startowe 1000 zł)
 

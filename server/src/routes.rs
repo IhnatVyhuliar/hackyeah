@@ -2,6 +2,7 @@
 
 use crate::ai::MOCK_SCENARIOS;
 use crate::auth::{check_password, sign_token, AuthUser};
+use crate::config::PaymentsMode;
 use crate::db;
 use crate::deals::{self, require_participant, Side};
 use crate::disputes;
@@ -9,19 +10,23 @@ use crate::error::{ApiError, ApiResult};
 use crate::machine::{self, is_hex32, DealAction};
 use crate::model::*;
 use crate::seed::register_user;
+use crate::solana;
 use crate::state::AppState;
 use crate::upload;
 use crate::wallet;
+use anchor_lang::prelude::Pubkey;
 use axum::body::{Body, Bytes};
 use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashMap;
+use std::str::FromStr;
+use unbox_escrow::constants::{DEAL_SEED, MAX_METADATA_URI_LEN};
 
 type Res = ApiResult<Response>;
 
@@ -71,12 +76,15 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/login", post(login))
         .route("/me", get(me))
         .route("/me/wallet", get(my_wallet))
+        .route("/me/wallet-address", put(set_wallet_address))
         .route("/me/listings", get(my_listings))
         .route("/categories", get(categories))
         .route("/listings", get(list_listings).post(create_listing))
         .route("/listings/{id}", get(get_listing).patch(update_listing))
         .route("/listings/{id}/cancel", post(cancel_listing))
         .route("/listings/{id}/purchase", post(purchase))
+        .route("/listings/{id}/publish", post(publish_listing))
+        .route("/listings/{id}/metadata.json", get(listing_metadata))
         .route("/deals", get(list_deals))
         .route("/deals/{id}", get(get_deal))
         .route("/deals/{id}/ship", post(ship))
@@ -89,6 +97,11 @@ pub fn router(state: AppState) -> Router {
     // TEST-ONLY: rejestrowany tylko przy NODE_ENV=test albo ENABLE_DEV_CLOCK=1, nigdy w produkcji.
     if state.cfg.dev_clock {
         api = api.route("/dev/clock", post(dev_clock));
+    }
+    if state.cfg.payments == PaymentsMode::Solana {
+        api = api
+            .route("/webhooks/helius", post(solana::webhook::helius))
+            .route("/chain/sync/{address}", post(chain_sync));
     }
     Router::new()
         .nest("/api", api)
@@ -110,8 +123,16 @@ async fn health(State(s): State<AppState>) -> Response {
     let db_ok = db::db_ok(&s.conn());
     let ai = s.ai_status.lock().unwrap_or_else(|p| p.into_inner()).text.clone();
     let status = if db_ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
-    let v = json!({ "ok": db_ok, "db": if db_ok { "ok" } else { "error" }, "ai": ai,
-                    "timeouts": s.cfg.timeouts_mode, "version": env!("CARGO_PKG_VERSION") });
+    let mut v = json!({ "ok": db_ok, "db": if db_ok { "ok" } else { "error" }, "ai": ai,
+                        "timeouts": s.cfg.timeouts_mode, "version": env!("CARGO_PKG_VERSION"), "payments": "demo" });
+    if let Some(sol) = &s.cfg.solana {
+        let sync = s.chain_sync.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        v["payments"] = json!("solana");
+        v["timeouts"] = json!(unbox_escrow::constants::TIMEOUT_PROFILE);
+        v["chain"] = json!({ "programId": unbox_escrow::ID.to_string(), "cluster": sol.cluster,
+                             "arbiter": sol.arbiter.to_string(), "lastSyncAt": sync.last_sync_at,
+                             "lastSyncError": sync.last_error });
+    }
     (status, Json(v)).into_response()
 }
 
@@ -214,11 +235,58 @@ async fn login(State(s): State<AppState>, b: Bytes) -> Res {
     ok(&json!({ "token": sign_token(&s, &user.id), "user": user }))
 }
 
+#[derive(Deserialize)]
+struct WalletAddressBody {
+    address: String,
+}
+
+/// Links the app's Solana wallet to the account; PAYMENTS=solana maps on-chain parties to users by it.
+async fn set_wallet_address(State(s): State<AppState>, AuthUser(mut u): AuthUser, b: Bytes) -> Res {
+    let i: WalletAddressBody = body(&b)?;
+    let address = i.address.trim().to_string();
+    Pubkey::from_str(&address).map_err(|_| ApiError::validation("address: niepoprawny adres portfela Solana"))?;
+    let mut conn = s.conn();
+    let user = db::tx(&mut conn, |c| {
+        if let Some(other) = db::user_by_wallet(c, &address)? {
+            if other.id != u.id {
+                return Err(ApiError::invalid_state("Ten portfel jest już podłączony do innego konta"));
+            }
+        }
+        u.wallet_address = Some(address);
+        db::user_update(c, &u)?;
+        Ok(u)
+    })?;
+    ok(&user)
+}
+
 async fn me(AuthUser(u): AuthUser) -> Res {
     ok(&u)
 }
 
 async fn my_wallet(State(s): State<AppState>, AuthUser(u): AuthUser) -> Res {
+    if let Some(chain) = s.chain.clone() {
+        // PAYMENTS=solana: the balance is the wallet's SOL; "held" is what sits in escrow for this buyer.
+        let balance = match &u.wallet_address {
+            Some(a) => {
+                let key =
+                    Pubkey::from_str(a).map_err(|_| ApiError::internal("Zapisany adres portfela jest niepoprawny"))?;
+                chain.balance(&key).await.map_err(|e| ApiError::upstream(format!("RPC: {e}")))?
+            }
+            None => 0,
+        };
+        let held_minor = db::doc_list::<Deal>(&s.conn(), "deal")?
+            .iter()
+            .filter(|d| d.buyer_id == u.id && d.payment.status == PaymentStatus::Secured)
+            .map(|d| d.payment.amount_minor)
+            .sum();
+        return ok(&Wallet {
+            balance_minor: balance as i64,
+            currency: "SOL".into(),
+            held_minor,
+            ledger: vec![],
+            address: u.wallet_address.clone(),
+        });
+    }
     deals::expire_due_for(&s, &u.id)?; // saldo zawsze po domknięciu transakcji, których termin minął
     ok(&wallet::wallet_of(&s.conn(), &u.id)?)
 }
@@ -323,10 +391,12 @@ async fn list_listings(State(s): State<AppState>, Query(q): Query<HashMap<String
     let needle = q.get("q").map(|v| v.trim().to_lowercase()).filter(|v| !v.is_empty());
     let cat = q.get("categoryId").filter(|v| !v.is_empty());
     let seller = q.get("sellerId").filter(|v| !v.is_empty());
+    let solana_mode = s.cfg.payments == PaymentsMode::Solana;
     let mut list: Vec<Listing> = db::doc_list::<Listing>(&s.conn(), "listing")?
         .into_iter()
         .filter(|l| {
             l.status == ListingStatus::Listed
+                && (!solana_mode || l.onchain.as_ref().is_some_and(|o| o.published))
                 && cat.is_none_or(|c| &l.category_id == c)
                 && seller.is_none_or(|x| &l.seller_id == x)
                 && needle.as_ref().is_none_or(|n| {
@@ -366,10 +436,11 @@ async fn create_listing(State(s): State<AppState>, AuthUser(u): AuthUser, b: Byt
         defects: i.defects.unwrap_or_default(),
         photos: i.photos.unwrap_or_default(),
         price_minor: i.price_minor.unwrap_or_default(),
-        currency: "PLN".into(),
+        currency: if s.cfg.payments == PaymentsMode::Solana { "SOL" } else { "PLN" }.into(),
         status: ListingStatus::Listed,
         created_at: t,
         updated_at: t,
+        onchain: None,
     };
     db::doc_put(&s.conn(), "listing", &l.id, &l)?;
     created(&l)
@@ -388,6 +459,9 @@ async fn update_listing(State(s): State<AppState>, AuthUser(u): AuthUser, Path(i
         }
         if l.status != ListingStatus::Listed {
             return Err(ApiError::invalid_state("Ogłoszenia nie można już edytować"));
+        }
+        if l.onchain.is_some() {
+            return Err(ApiError::invalid_state("Ogłoszenie jest opublikowane w umowie, treści nie można już zmienić"));
         }
         if let Some(v) = i.title {
             l.title = v;
@@ -434,6 +508,9 @@ async fn cancel_listing(State(s): State<AppState>, AuthUser(u): AuthUser, Path(i
         if l.status != ListingStatus::Listed {
             return Err(ApiError::invalid_state("Można anulować tylko niekupione ogłoszenie"));
         }
+        if l.onchain.as_ref().is_some_and(|o| o.published) {
+            return Err(ApiError::invalid_state("Opublikowane ogłoszenie anulujesz w portfelu (cancel_listing)"));
+        }
         l.status = ListingStatus::Cancelled;
         l.updated_at = t;
         db::doc_put(c, "listing", &l.id, &l)?;
@@ -442,8 +519,81 @@ async fn cancel_listing(State(s): State<AppState>, AuthUser(u): AuthUser, Path(i
     ok(&l)
 }
 
+/// PAYMENTS=solana: freezes the listing and returns the `create_listing` arguments; the app signs them.
+async fn publish_listing(State(s): State<AppState>, AuthUser(u): AuthUser, Path(id): Path<String>) -> Res {
+    let sol = s
+        .cfg
+        .solana
+        .clone()
+        .ok_or_else(|| ApiError::invalid_state("Publikacja w umowie działa tylko przy PAYMENTS=solana"))?;
+    let wallet = u
+        .wallet_address
+        .clone()
+        .ok_or_else(|| ApiError::invalid_state("Najpierw podłącz portfel (PUT /api/me/wallet-address)"))?;
+    let seller =
+        Pubkey::from_str(&wallet).map_err(|_| ApiError::internal("Zapisany adres portfela jest niepoprawny"))?;
+    let t = s.now();
+    let base = s.cfg.public_base_url.clone();
+    let mut conn = s.conn();
+    let l = db::tx(&mut conn, |c| {
+        let mut l = load_listing(c, &id)?;
+        if l.seller_id != u.id {
+            return Err(ApiError::forbidden("To nie Twoje ogłoszenie"));
+        }
+        if l.status != ListingStatus::Listed {
+            return Err(ApiError::invalid_state("Ogłoszenie nie jest już dostępne"));
+        }
+        if l.currency != "SOL" {
+            return Err(ApiError::invalid_state("Cena ogłoszenia nie jest w SOL"));
+        }
+        if l.onchain.is_none() {
+            let deal_id = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            let (deal, _) =
+                Pubkey::find_program_address(&[DEAL_SEED, seller.as_ref(), &deal_id.to_le_bytes()], &unbox_escrow::ID);
+            let metadata_uri = format!("{base}/api/listings/{}/metadata.json", l.id);
+            if metadata_uri.len() > MAX_METADATA_URI_LEN {
+                return Err(ApiError::internal(
+                    "PUBLIC_BASE_URL jest za długi: metadata_uri musi mieć najwyżej 200 znaków",
+                ));
+            }
+            l.onchain = Some(OnChainListing {
+                deal: deal.to_string(),
+                deal_id,
+                seller_wallet: wallet.clone(),
+                listing_hash: machine::hash_document(&ListingMetadata::of(&l)),
+                metadata_uri,
+                published: false,
+            });
+            l.updated_at = t;
+            db::doc_put(c, "listing", &l.id, &l)?;
+        }
+        Ok(l)
+    })?;
+    let o = l.onchain.as_ref().expect("onchain set above");
+    ok(&json!({
+        "listingId": l.id, "deal": o.deal, "dealId": o.deal_id, "priceLamports": l.price_minor,
+        "listingHash": o.listing_hash, "metadataUri": o.metadata_uri,
+        "arbiter": sol.arbiter.to_string(), "programId": unbox_escrow::ID.to_string()
+    }))
+}
+
+/// Exactly the bytes whose sha256 is `listing_hash` on-chain.
+async fn listing_metadata(State(s): State<AppState>, Path(id): Path<String>) -> Res {
+    let l = load_listing(&s.conn(), &id)?;
+    let o = l.onchain.as_ref().ok_or_else(|| ApiError::not_found("Ogłoszenie nie jest opublikowane w umowie"))?;
+    let bytes = machine::canonical_json(&ListingMetadata::of(&l));
+    if machine::sha256_hex(bytes.as_bytes()) != o.listing_hash {
+        return Err(ApiError::internal("Treść ogłoszenia nie zgadza się z hashem w umowie"));
+    }
+    Ok(([(header::CONTENT_TYPE, "application/json")], bytes).into_response())
+}
+
 /// Zakup: zabezpiecza płatność z salda demo i tworzy transakcję (status Paid).
 async fn purchase(State(s): State<AppState>, AuthUser(u): AuthUser, Path(id): Path<String>) -> Res {
+    solana::demo_only(&s)?;
     created(&deals::purchase(&s, &id, &u)?)
 }
 
@@ -491,6 +641,7 @@ struct ShipBody {
 }
 
 async fn ship(State(s): State<AppState>, AuthUser(u): AuthUser, Path(id): Path<String>, b: Bytes) -> Res {
+    solana::demo_only(&s)?;
     let i: ShipBody = body(&b)?;
     hex32("qrCommitment", &i.qr_commitment)?;
     hex32("packingVideoSha256", &i.packing_video_sha256)?;
@@ -516,6 +667,7 @@ struct AcceptBody {
 }
 
 async fn accept(State(s): State<AppState>, AuthUser(u): AuthUser, Path(id): Path<String>, b: Bytes) -> Res {
+    solana::demo_only(&s)?;
     let i: AcceptBody = body(&b)?;
     hex32("qrSecret", &i.qr_secret)?;
     participant_deal(&s, &id, &u.id, None)?;
@@ -543,6 +695,7 @@ async fn dispute(
     headers: HeaderMap,
     b: Bytes,
 ) -> Res {
+    solana::demo_only(&s)?;
     let i: DisputeBody = body(&b)?;
     hex32("qrSecret", &i.qr_secret)?;
     hex32("unboxingVideoSha256", &i.unboxing_video_sha256)?;
@@ -587,6 +740,7 @@ struct ReturnBody {
 }
 
 async fn mark_returned(State(s): State<AppState>, AuthUser(u): AuthUser, Path(id): Path<String>, b: Bytes) -> Res {
+    solana::demo_only(&s)?;
     let i: ReturnBody = body(&b)?;
     hex32("returnQrCommitment", &i.return_qr_commitment)?;
     hex32("returnVideoSha256", &i.return_video_sha256)?;
@@ -612,6 +766,7 @@ struct ConfirmReturnBody {
 }
 
 async fn confirm_return(State(s): State<AppState>, AuthUser(u): AuthUser, Path(id): Path<String>, b: Bytes) -> Res {
+    solana::demo_only(&s)?;
     let i: ConfirmReturnBody = body(&b)?;
     hex32("returnQrSecret", &i.return_qr_secret)?;
     participant_deal(&s, &id, &u.id, None)?;
@@ -622,8 +777,25 @@ async fn confirm_return(State(s): State<AppState>, AuthUser(u): AuthUser, Path(i
     )?)
 }
 
+/// The app calls this right after its transaction confirms, so the UI does not wait for the webhook.
+async fn chain_sync(State(s): State<AppState>, AuthUser(_u): AuthUser, Path(address): Path<String>) -> Res {
+    let key = Pubkey::from_str(&address).map_err(|_| ApiError::validation("Niepoprawny adres umowy"))?;
+    let listing_id = solana::indexer::known_addresses(&s)?
+        .remove(&address)
+        .ok_or_else(|| ApiError::not_found("Nie ma ogłoszenia z tym adresem umowy"))?;
+    solana::indexer::sync_addresses(&s, &[key]).await.map_err(|e| ApiError::upstream(format!("RPC: {e}")))?;
+    let conn = s.conn();
+    let listing = load_listing(&conn, &listing_id)?;
+    let deal: Option<Deal> = db::doc_get(&conn, "deal", &listing_id)?;
+    ok(&json!({
+        "listingId": listing_id, "listingStatus": listing.status,
+        "published": listing.onchain.map(|o| o.published), "dealStatus": deal.map(|d| d.status)
+    }))
+}
+
 /// „Odbierz środki” po terminie. Backend domyka też sam (odczyt i cykliczny sweep); to wymusza od razu.
 async fn settle(State(s): State<AppState>, AuthUser(u): AuthUser, Path(id): Path<String>) -> Res {
+    solana::demo_only(&s)?;
     let d = deals::get_deal(&s.conn(), &id)?;
     require_participant(&d, &u.id)?;
     ok(&deals::apply_action(&s, &id, DealAction::Expire)?)

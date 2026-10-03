@@ -1,6 +1,7 @@
 use crate::ai::Ai;
 use crate::config::Config;
 use crate::model::Unix;
+use crate::solana::chain::RpcChain;
 use rusqlite::Connection;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -19,6 +20,12 @@ pub struct AiStatus {
     pub checking: bool,
 }
 
+#[derive(Default, Clone)]
+pub struct ChainSync {
+    pub last_sync_at: Option<Unix>,
+    pub last_error: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub cfg: Arc<Config>,
@@ -27,6 +34,9 @@ pub struct AppState {
     pub ai: Arc<Ai>,
     pub disputes: Arc<DisputeState>,
     pub ai_status: Arc<Mutex<AiStatus>>,
+    /// PAYMENTS=solana: read-only RPC client; None in demo mode.
+    pub chain: Option<Arc<RpcChain>>,
+    pub chain_sync: Arc<Mutex<ChainSync>>,
 }
 
 pub fn unix_now() -> Unix {
@@ -37,6 +47,7 @@ impl AppState {
     pub fn new(cfg: Config, conn: Connection) -> Self {
         let ai = Ai::from_config(&cfg);
         let initial = if cfg.ai == crate::config::AiMode::Mock { "mock" } else { "http (jeszcze nie sprawdzono)" };
+        let chain = cfg.solana.as_ref().map(|s| Arc::new(RpcChain::new(&s.rpc_url)));
         Self {
             cfg: Arc::new(cfg),
             db: Arc::new(Mutex::new(conn)),
@@ -44,6 +55,8 @@ impl AppState {
             ai: Arc::new(ai),
             disputes: Arc::new(DisputeState::default()),
             ai_status: Arc::new(Mutex::new(AiStatus { text: initial.into(), checked_at_ms: 0, checking: false })),
+            chain,
+            chain_sync: Arc::new(Mutex::new(ChainSync::default())),
         }
     }
 

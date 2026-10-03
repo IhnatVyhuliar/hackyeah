@@ -50,6 +50,10 @@ pub fn apply_action(state: &AppState, id: &str, action: DealAction) -> ApiResult
 
 /// Leniwe domknięcie po terminie (settle_expired). Zwraca aktualny stan.
 pub fn expire_if_due(state: &AppState, id: &str) -> ApiResult<Deal> {
+    // PAYMENTS=solana: deadlines are enforced by the program (settle_expired, callable by anyone).
+    if state.cfg.payments == crate::config::PaymentsMode::Solana {
+        return get_deal(&state.conn(), id);
+    }
     let d = get_deal(&state.conn(), id)?;
     match d.deadline_at {
         Some(dl) if state.now() >= dl => match apply_action(state, id, DealAction::Expire) {
@@ -113,6 +117,7 @@ pub fn purchase(state: &AppState, listing_id: &str, buyer: &User) -> ApiResult<D
                 label: "Kupujący zapłacił: środki zabezpieczone do zakończenia transakcji".into(),
             }],
             created_at: t,
+            onchain: None,
         };
         wallet::secure(c, &deal, t)?;
         l.status = ListingStatus::Sold;
