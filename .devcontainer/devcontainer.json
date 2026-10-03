@@ -1,0 +1,15 @@
+{
+  "name": "unboxproof — Anchor toolchain",
+  "build": { "dockerfile": "Dockerfile", "context": ".." },
+  "remoteUser": "root",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/work,type=bind",
+  "workspaceFolder": "/work",
+  "forwardPorts": [8899],
+  "mounts": [
+    "source=${localEnv:HOME}/.config/solana,target=/root/.config/solana,type=bind",
+    "source=unbox-cargo-registry,target=/root/.cargo/registry,type=volume"
+  ],
+  "customizations": {
+    "vscode": { "extensions": ["rust-lang.rust-analyzer", "tamasfe.even-better-toml"] }
+  }
+}
