@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Sellsor",
+    "slug": "sellsor",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0B0F",
+    "ios": { "supportsTablet": false },
+    "android": { "edgeToEdgeEnabled": true }
+  }
+}
