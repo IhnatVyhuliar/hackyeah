@@ -110,8 +110,16 @@ async fn health(State(s): State<AppState>) -> Response {
     let db_ok = db::db_ok(&s.conn());
     let ai = s.ai_status.lock().unwrap_or_else(|p| p.into_inner()).text.clone();
     let status = if db_ok { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
-    let v = json!({ "ok": db_ok, "db": if db_ok { "ok" } else { "error" }, "ai": ai,
-                    "timeouts": s.cfg.timeouts_mode, "version": env!("CARGO_PKG_VERSION") });
+    let mut v = json!({ "ok": db_ok, "db": if db_ok { "ok" } else { "error" }, "ai": ai,
+                        "timeouts": s.cfg.timeouts_mode, "version": env!("CARGO_PKG_VERSION"), "payments": "demo" });
+    if let Some(sol) = &s.cfg.solana {
+        let sync = s.chain_sync.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        v["payments"] = json!("solana");
+        v["timeouts"] = json!(unbox_escrow::constants::TIMEOUT_PROFILE);
+        v["chain"] = json!({ "programId": unbox_escrow::ID.to_string(), "cluster": sol.cluster,
+                             "arbiter": sol.arbiter.to_string(), "lastSyncAt": sync.last_sync_at,
+                             "lastSyncError": sync.last_error });
+    }
     (status, Json(v)).into_response()
 }
 

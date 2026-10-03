@@ -4,7 +4,7 @@ version = "0.4.0"
 edition = "2021"
 rust-version = "1.85"
 publish = false
-description = "unbox shop backend: HTTP API, SQLite, demo payments, dispute analysis (no blockchain)"
+description = "unbox shop backend: HTTP API, SQLite, media; PAYMENTS=solana mirrors the unbox_escrow program"
 
 # Samodzielny crate: pusty [workspace] odcina go od root workspace'u Cargo (programs/*).
 [workspace]
@@ -33,6 +33,10 @@ uuid = { version = "1", features = ["v4"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# On-chain Deal layout, PDA seeds and deadlines come from the program crate itself (no second copy).
+unbox_escrow = { path = "../programs/unbox_escrow", features = ["no-entrypoint"] }
+anchor-lang = "=1.1.2"
+base64 = "0.22"
 
 [dev-dependencies]
 tempfile = "3"
