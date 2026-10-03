@@ -47,7 +47,12 @@ fn event_kind(s: DealStatus) -> &'static str {
 
 /// The program allows party actions only before the deadline and settle_expired only after it,
 /// so the previous status plus "before/after deadline" tells why the deal closed.
-pub fn close_reason(prev: Option<&Deal>, to: DealStatus, verdict: ChainVerdict, changed_at: Unix) -> Option<CloseReason> {
+pub fn close_reason(
+    prev: Option<&Deal>,
+    to: DealStatus,
+    verdict: ChainVerdict,
+    changed_at: Unix,
+) -> Option<CloseReason> {
     let before_deadline = prev.and_then(|d| d.deadline_at).is_some_and(|dl| changed_at < dl);
     match (to, prev.map(|d| d.status)) {
         (DealStatus::Completed, _) if verdict == ChainVerdict::Seller => Some(CloseReason::VerdictSeller),
@@ -65,7 +70,13 @@ pub fn close_reason(prev: Option<&Deal>, to: DealStatus, verdict: ChainVerdict, 
 
 /// The API document for `listing`'s deal. None when the account is not a deal yet (Listed/Cancelled)
 /// or the snapshot is older than the stored one (RPC nodes can lag; webhook and poller race).
-pub fn mirror_deal(prev: Option<&Deal>, listing: &Listing, snap: &ChainSnapshot, buyer: Party, now: Unix) -> Option<Deal> {
+pub fn mirror_deal(
+    prev: Option<&Deal>,
+    listing: &Listing,
+    snap: &ChainSnapshot,
+    buyer: Party,
+    now: Unix,
+) -> Option<Deal> {
     let chain = snap.deal;
     let status = model_status(chain.status)?;
     if prev.is_some_and(|p| chain.status_changed_at < p.status_changed_at) {
@@ -74,7 +85,11 @@ pub fn mirror_deal(prev: Option<&Deal>, listing: &Listing, snap: &ChainSnapshot,
     let mut timeline = prev.map(|p| p.timeline.clone()).unwrap_or_default();
     let mut transactions = prev.and_then(|p| p.onchain.as_ref()).map(|o| o.transactions.clone()).unwrap_or_default();
     if prev.map(|p| p.status) != Some(status) {
-        timeline.push(TimelineEvent { at: chain.status_changed_at, kind: event_kind(status).into(), label: status_label(status).into() });
+        timeline.push(TimelineEvent {
+            at: chain.status_changed_at,
+            kind: event_kind(status).into(),
+            label: status_label(status).into(),
+        });
         transactions.push(ChainTx {
             status,
             at: chain.status_changed_at,
@@ -195,7 +210,12 @@ mod tests {
     }
 
     fn mirror(prev: Option<&Deal>, c: &ChainDeal) -> Option<Deal> {
-        let snap = ChainSnapshot { address: "PDA", deal: c, signature: Some("sig1".into()), explorer_url: Some("https://x/sig1".into()) };
+        let snap = ChainSnapshot {
+            address: "PDA",
+            deal: c,
+            signature: Some("sig1".into()),
+            explorer_url: Some("https://x/sig1".into()),
+        };
         mirror_deal(prev, &listing(), &snap, buyer(), 999)
     }
 
@@ -265,7 +285,10 @@ mod tests {
         let mut won = chain(ChainStatus::Completed, 310);
         won.verdict = ChainVerdict::Seller;
         let resolved = mirror(Some(&disputed), &won).unwrap();
-        assert_eq!((resolved.close_reason, resolved.verdict), (Some(CloseReason::VerdictSeller), Some(Verdict::Seller)));
+        assert_eq!(
+            (resolved.close_reason, resolved.verdict),
+            (Some(CloseReason::VerdictSeller), Some(Verdict::Seller))
+        );
 
         let requested = mirror(None, &chain(ChainStatus::ReturnRequested, 400)).unwrap();
         let kept = mirror(Some(&requested), &chain(ChainStatus::Completed, 5_000)).unwrap();

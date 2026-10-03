@@ -65,9 +65,7 @@ async fn handle(State(s): State<Arc<Inner>>, Json(req): Json<Value>) -> Result<J
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
     let owner = unbox_escrow::ID.to_string();
-    let account = |data: &Vec<u8>| {
-        json!({ "data": [B64.encode(data), "base64"], "owner": owner, "lamports": 1, "executable": false, "rentEpoch": 0 })
-    };
+    let account = |data: &Vec<u8>| json!({ "data": [B64.encode(data), "base64"], "owner": owner, "lamports": 1, "executable": false, "rentEpoch": 0 });
     let params = &req["params"];
     let result = match req["method"].as_str().unwrap_or("") {
         "getMultipleAccounts" => {
@@ -77,7 +75,7 @@ async fn handle(State(s): State<Arc<Inner>>, Json(req): Json<Value>) -> Result<J
                 .cloned()
                 .unwrap_or_default()
                 .iter()
-                .map(|k| k.as_str().and_then(|k| accounts.get(k)).map(|d| account(d)).unwrap_or(Value::Null))
+                .map(|k| k.as_str().and_then(|k| accounts.get(k)).map(&account).unwrap_or(Value::Null))
                 .collect();
             json!({ "context": { "slot": 1 }, "value": value })
         }
@@ -104,7 +102,14 @@ async fn handle(State(s): State<Arc<Inner>>, Json(req): Json<Value>) -> Result<J
 }
 
 /// An on-chain Deal as the program would store it; `listing_hash_hex` must equal the published hash.
-pub fn chain_deal(seller: Pubkey, buyer: Pubkey, status: DealStatus, changed_at: i64, listing_hash_hex: &str, price: u64) -> Deal {
+pub fn chain_deal(
+    seller: Pubkey,
+    buyer: Pubkey,
+    status: DealStatus,
+    changed_at: i64,
+    listing_hash_hex: &str,
+    price: u64,
+) -> Deal {
     Deal {
         seller,
         buyer,

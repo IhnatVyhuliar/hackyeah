@@ -99,7 +99,13 @@ fn status_changes(state: &AppState, listing_id: &str, status: ChainStatus) -> bo
     stored.map(|d| d.status) != Some(next)
 }
 
-fn apply(state: &AppState, listing_id: &str, address: &str, chain: &ChainDeal, signature: Option<String>) -> ApiResult<()> {
+fn apply(
+    state: &AppState,
+    listing_id: &str,
+    address: &str,
+    chain: &ChainDeal,
+    signature: Option<String>,
+) -> ApiResult<()> {
     let explorer_url = signature.as_deref().zip(state.cfg.solana.as_ref()).map(|(sig, cfg)| explorer_tx_url(sig, cfg));
     let now = state.now();
     let mut conn = state.conn();
@@ -108,7 +114,8 @@ fn apply(state: &AppState, listing_id: &str, address: &str, chain: &ChainDeal, s
             db::doc_get(c, "listing", listing_id)?.ok_or_else(|| ApiError::not_found("Nie ma takiego ogłoszenia"))?;
         let Some(onchain) = l.onchain.as_mut() else { return Ok(()) };
         // The account must describe exactly the content we serve; otherwise it is not this listing's deal.
-        if hex::encode(chain.listing_hash) != onchain.listing_hash || chain.seller.to_string() != onchain.seller_wallet {
+        if hex::encode(chain.listing_hash) != onchain.listing_hash || chain.seller.to_string() != onchain.seller_wallet
+        {
             tracing::warn!(%address, "on-chain deal does not match the stored listing, ignored");
             return Ok(());
         }
@@ -138,7 +145,10 @@ fn apply(state: &AppState, listing_id: &str, address: &str, chain: &ChainDeal, s
                 let buyer_wallet = chain.buyer.to_string();
                 let buyer = match db::user_by_wallet(c, &buyer_wallet)? {
                     Some(u) => Party { id: u.id, name: u.name },
-                    None => Party { id: format!("wallet:{buyer_wallet}"), name: format!("Portfel {}…", &buyer_wallet[..6]) },
+                    None => Party {
+                        id: format!("wallet:{buyer_wallet}"),
+                        name: format!("Portfel {}…", &buyer_wallet[..6]),
+                    },
                 };
                 let snap = ChainSnapshot { address, deal: chain, signature, explorer_url };
                 if let Some(next) = mirror_deal(prev.as_ref(), &l, &snap, buyer, now) {
