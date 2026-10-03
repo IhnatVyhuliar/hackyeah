@@ -1,18 +1,14 @@
-// Contract-test: pełny przepływ przez REST API (KONTRAKT §8) dla 4 scenariuszy + timeouty + przypadki negatywne.
-// Każda odpowiedź przechodzi przez schematy zod z @sellsol/shared. Kod wyjścia ≠ 0 przy błędzie.
+// Contract-test backendu sklepu: pełne ścieżki przez REST API, każda odpowiedź walidowana schematami z @unbox/shared.
+// Bez blockchaina i zewnętrznych usług. Kod wyjścia ≠ 0 przy błędzie.
 //
-//   mock:   CHAIN=mock AI=mock npm run dev -w server   →   npx tsx scripts/contract-test.ts
-//   devnet: serwer CHAIN=devnet AI=mock, potem
-//           API_URL=… DEMO_BUYER_SECRET='[…]' DEMO_SELLER_SECRET='[…]' RPC_URL=… npx tsx scripts/contract-test.ts --only ok
-import fs from 'node:fs';
+//   ENABLE_DEV_CLOCK=1 AI=mock MOCK_AI_DELAY_MS=300 AI_RETRY_MS=100 AI_MAX_ATTEMPTS=2 npm run dev -w server
+//   npx tsx scripts/contract-test.ts [--only ok,defect]
 import { randomBytes } from 'node:crypto';
-import { Connection, Keypair, Transaction } from '@solana/web3.js';
 import { z } from 'zod';
 import {
-  ApiErrorSchema, AuthResponseSchema, type DemoScenario, HealthSchema, ListingSchema, type Order, OrderSchema,
-  type OutcomeReason, PreparedTxSchema, SealSchema, sealHash, type TxAction, UploadResultSchema, UserSchema,
-  VerificationSchema, VideoUploadResponseSchema,
-} from '@sellsol/shared';
+  ApiErrorSchema, AuthResponseSchema, type Deal, DealSchema, hashDocument, HealthSchema, type Listing, ListingSchema,
+  MediaUploadSchema, newQrSecret, returnCommitment, shipCommitment, TIMEOUTS_DEMO, TIMEOUTS_PROD, WalletSchema,
+} from '@unbox/shared';
 
 const API = (process.env.API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
 const args = process.argv.slice(2);
@@ -24,239 +20,271 @@ function assert(cond: unknown, msg: string): asserts cond { if (!cond) throw new
 
 // ---------- HTTP ----------
 
-async function call<S extends z.ZodType>(schema: S, method: string, path: string,
-  o: { token?: string; body?: unknown; form?: FormData; headers?: Record<string, string>; expect?: number } = {}): Promise<z.infer<S>> {
+type Opts = { token?: string; body?: unknown; form?: FormData; headers?: Record<string, string>; expect?: number };
+
+async function call<S extends z.ZodType>(schema: S, method: string, path: string, o: Opts = {}): Promise<z.infer<S>> {
   const headers: Record<string, string> = { ...o.headers };
   if (o.token) headers.Authorization = `Bearer ${o.token}`;
   if (o.body !== undefined) headers['Content-Type'] = 'application/json';
   const res = await fetch(`${API}${path}`, { method, headers, body: o.form ?? (o.body !== undefined ? JSON.stringify(o.body) : undefined) });
   const json = await res.json().catch(() => null);
-  if (o.expect && res.status !== o.expect) throw new Fail(`${method} ${path}: HTTP ${res.status}, oczekiwano ${o.expect}: ${JSON.stringify(json)}`);
-  if (!o.expect && !res.ok) throw new Fail(`${method} ${path}: HTTP ${res.status} ${JSON.stringify(json)}`);
+  if (o.expect ? res.status !== o.expect : !res.ok)
+    throw new Fail(`${method} ${path}: HTTP ${res.status}${o.expect ? `, oczekiwano ${o.expect}` : ''}: ${JSON.stringify(json)}`);
   const parsed = schema.safeParse(json);
-  if (!parsed.success) throw new Fail(`${method} ${path}: odpowiedź niezgodna z kontraktem: ${JSON.stringify(parsed.error.issues.slice(0, 3))}`);
+  if (!parsed.success) throw new Fail(`${method} ${path}: odpowiedź niezgodna ze schematem: ${JSON.stringify(parsed.error.issues.slice(0, 3))}`);
   return parsed.data;
 }
 
-async function expectError(code: string, status: number, method: string, path: string, o: Parameters<typeof call>[3] = {}) {
-  const e = await call(ApiErrorSchema, method, path, { ...o, expect: status });
+const STATUS: Record<string, number> = { FORBIDDEN: 403, NOT_FOUND: 404, VALIDATION: 400, UNAUTHORIZED: 401 };
+async function expectError(code: string, method: string, path: string, o: Opts = {}) {
+  const e = await call(ApiErrorSchema, method, path, { ...o, expect: STATUS[code] ?? 409 });
   assert(e.error.code === code, `${method} ${path}: kod ${e.error.code}, oczekiwano ${code}`);
 }
 
-// ---------- podpis: MOCK albo prawdziwy klucz demo ----------
+// ---------- aktorzy i pomocnicze ----------
 
-const conn = new Connection(process.env.RPC_URL ?? 'https://api.devnet.solana.com', 'confirmed');
-const keyFrom = (v?: string) => (v ? Keypair.fromSecretKey(Uint8Array.from(JSON.parse(v))) : null);
-const keys = { buyer: keyFrom(process.env.DEMO_BUYER_SECRET), seller: keyFrom(process.env.DEMO_SELLER_SECRET) };
-
-async function signAndSend(txBase64: string, who: 'buyer' | 'seller'): Promise<string> {
-  if (txBase64 === 'MOCK') return `MOCK${randomBytes(16).toString('hex')}`;
-  const kp = keys[who];
-  assert(kp, `Brak DEMO_${who.toUpperCase()}_SECRET do podpisu transakcji devnet`);
-  const tx = Transaction.from(Buffer.from(txBase64, 'base64'));
-  tx.partialSign(kp);
-  const sig = await conn.sendRawTransaction(tx.serialize());
-  const bh = await conn.getLatestBlockhash('confirmed');
-  await conn.confirmTransaction({ signature: sig, ...bh }, 'confirmed');
-  return sig;
-}
-
-// ---------- kroki ----------
-
-interface Actor { token: string; who: 'buyer' | 'seller' }
-
-async function login(email: string, who: Actor['who']): Promise<Actor> {
+interface Actor { token: string; id: string; name: string }
+async function login(email: string): Promise<Actor> {
   const r = await call(AuthResponseSchema, 'POST', '/api/auth/login', { body: { email, password: 'demo1234' } });
-  const kp = keys[who];
-  if (kp && r.user.walletAddress !== kp.publicKey.toBase58())
-    await call(UserSchema, 'PATCH', '/api/me', { token: r.token, body: { walletAddress: kp.publicKey.toBase58() } });
-  return { token: r.token, who };
+  return { token: r.token, id: r.user.id, name: r.user.name };
 }
+const balance = async (a: Actor) => (await call(WalletSchema, 'GET', '/api/me/wallet', { token: a.token })).balanceMinor;
 
-async function tx(a: Actor, orderId: string, action: TxAction): Promise<Order> {
-  const p = await call(PreparedTxSchema, 'POST', `/api/orders/${orderId}/tx/prepare`, { token: a.token, body: { action } });
-  assert(p.action === action, 'PreparedTx.action');
-  const signature = await signAndSend(p.txBase64, a.who);
-  return call(OrderSchema, 'POST', `/api/orders/${orderId}/tx`, { token: a.token, body: { action, signature } });
-}
-
-function videoForm(markers: object): FormData {
+async function upload(a: Actor, mimeType: string) {
   const f = new FormData();
-  // Bez TEST_VIDEO: losowe bajty, więc każdy upload ma inny hasz. Z TEST_VIDEO: ten sam plik (i hasz)
-  // we wszystkich zamówieniach; to wystarcza przy AI=mock, bo wynik wybiera nagłówek X-Demo-Scenario.
-  const bytes = process.env.TEST_VIDEO ? fs.readFileSync(process.env.TEST_VIDEO) : randomBytes(64 * 1024);
-  f.set('video', new Blob([bytes], { type: 'video/mp4' }), 'test.mp4');
-  f.set('markers', JSON.stringify(markers));
-  return f;
+  f.set('file', new Blob([randomBytes(32 * 1024)], { type: mimeType }), mimeType.startsWith('video') ? 'v.mp4' : 'p.jpg');
+  const m = await call(MediaUploadSchema, 'POST', '/api/media', { token: a.token, form: f, expect: 201 });
+  const got = await fetch(m.url);
+  assert(got.ok && got.headers.get('content-type') === mimeType, `GET ${m.url} zwraca plik`);
+  return m;
 }
 
-async function waitVerification(a: Actor, id: string) {
-  for (let i = 0; i < 120; i++) {
-    const v = await call(VerificationSchema, 'GET', `/api/verifications/${id}`, { token: a.token });
-    if (v.status !== 'processing') return v;
-    await sleep(1000);
+const getDeal = (a: Actor, id: string) => call(DealSchema, 'GET', `/api/deals/${id}`, { token: a.token });
+const act = (a: Actor, id: string, action: string, body: unknown = {}, headers?: Record<string, string>) =>
+  call(DealSchema, 'POST', `/api/deals/${id}/${action}`, { token: a.token, body, headers });
+
+let timeouts = TIMEOUTS_DEMO;
+async function advance(secs: number) {
+  await call(z.object({ now: z.number() }), 'POST', '/api/dev/clock', { body: { advanceSecs: secs } });
+}
+
+async function waitAnalysis(a: Actor, id: string, done: (d: Deal) => boolean, what: string) {
+  for (let i = 0; i < 60; i++) {
+    const d = await getDeal(a, id);
+    if (done(d)) return d;
+    await sleep(250);
   }
-  throw new Fail(`Weryfikacja ${id} nie skończyła się w 120 s`);
+  throw new Fail(`${id}: nie doczekano się: ${what}`);
 }
 
-async function waitOrder(a: Actor, id: string, pred: (o: Order) => boolean, what: string, secs = 90) {
-  for (let i = 0; i < secs; i++) {
-    const o = await call(OrderSchema, 'GET', `/api/orders/${id}`, { token: a.token });
-    if (pred(o)) return o;
-    await sleep(1000);
-  }
-  throw new Fail(`Zamówienie ${id}: nie doczekano się: ${what}`);
+function expectClosed(d: Deal, status: 'Completed' | 'Refunded', closeReason: Deal['closeReason']) {
+  assert(d.status === status && d.closeReason === closeReason, `wynik ${d.status}/${d.closeReason}, oczekiwano ${status}/${closeReason}`);
+  assert(d.payment.status === (status === 'Completed' ? 'released' : 'refunded') && d.payment.settledAt != null, `płatność: ${d.payment.status}`);
+  assert(d.deadlineAt === null, 'brak terminu w stanie końcowym');
 }
 
-const mockMode = async () => (await call(HealthSchema, 'GET', '/api/health')).cluster === 'mock';
+// ---------- kroki przepływu ----------
 
-async function advanceOrWait(secs: number) {
-  if (await mockMode()) await call(z.object({ chainNow: z.number() }), 'POST', '/api/dev/clock', { body: { advanceSecs: secs } });
-  else await sleep(secs * 1000);
-}
-
-async function newListing(seller: Actor, windowSecs: number) {
-  const photo = new FormData();
-  photo.set('file', new Blob([randomBytes(2048)], { type: 'image/jpeg' }), 'kurtka.jpg');
-  const up = await call(UploadResultSchema, 'POST', '/api/uploads', { token: seller.token, form: photo, expect: 201 });
+async function newListing(seller: Actor, price = 1_500): Promise<Listing> {
+  const photo = await upload(seller, 'image/jpeg');
   return call(ListingSchema, 'POST', '/api/listings', { token: seller.token, expect: 201, body: {
-    title: "Kurtka jeansowa Levi's, rozmiar M", description: 'Contract-test', categoryId: 'odziez-meska', condition: 'dobry',
-    size: 'M', brand: "Levi's", priceLamports: '20000000', photos: [up.url], declaredWeightG: 900,
-    dimensionsCm: { l: 40, w: 30, h: 8 }, extraTests: [{ id: 't1', description: 'Pokaż metkę z rozmiarem M' }],
-    windows: { shipWindowSecs: windowSecs, openWindowSecs: windowSecs },
+    title: "Kurtka jeansowa Levi's", description: 'Contract-test', categoryId: 'odziez-meska', condition: 'dobry',
+    brand: "Levi's", size: 'M', defects: ['Lekkie przetarcie mankietu'], photos: [photo], priceMinor: price,
   } });
 }
 
-async function fundedOrder(buyer: Actor, seller: Actor, windowSecs: number) {
-  const listing = await newListing(seller, windowSecs);
-  let o = await call(OrderSchema, 'POST', '/api/orders', { token: buyer.token, body: { listingId: listing.id }, expect: 201 });
-  assert(o.status === 'awaiting_payment' && o.chainStatus === 'none', `nowe zamówienie: ${o.status}`);
-  assert(o.listing.status === 'reserved', 'oferta → reserved');
-  await expectError('FORBIDDEN', 403, 'POST', `/api/orders/${o.id}/tx/prepare`, { token: seller.token, body: { action: 'fund' } });
-  o = await tx(buyer, o.id, 'fund');
-  assert(o.chainStatus === 'Funded' && o.status === 'funded', `po fund: ${o.chainStatus}/${o.status}`);
-  assert(o.shipDeadline != null && o.txs.some((t) => t.action === 'fund'), 'shipDeadline i txs po fund');
-  await expectError('INVALID_STATE', 409, 'POST', `/api/orders/${o.id}/tx/prepare`, { token: buyer.token, body: { action: 'fund' } });
-  return o;
+async function paidDeal(seller: Actor, buyer: Actor, stranger: Actor) {
+  const l = await newListing(seller);
+  const before = await balance(buyer);
+  await expectError('FORBIDDEN', 'POST', `/api/listings/${l.id}/purchase`, { token: seller.token });
+  const d = await call(DealSchema, 'POST', `/api/listings/${l.id}/purchase`, { token: buyer.token, expect: 201 });
+  assert(d.status === 'Paid' && d.payment.status === 'secured' && d.deadlineAt === d.statusChangedAt + timeouts.Paid, `po zakupie: ${d.status}`);
+  assert(d.listingHash === hashDocument(d.listing), 'listingHash = sha256(canonicalJson(listing))');
+  assert(await balance(buyer) === before - l.priceMinor, 'saldo kupującego pomniejszone o cenę');
+  await expectError('INVALID_STATE', 'POST', `/api/listings/${l.id}/purchase`, { token: stranger.token });
+  await expectError('INVALID_STATE', 'PATCH', `/api/listings/${l.id}`, { token: seller.token, body: { priceMinor: 1 } });
+  await expectError('FORBIDDEN', 'GET', `/api/deals/${d.id}`, { token: stranger.token });
+  const listed = await call(z.array(ListingSchema), 'GET', '/api/listings');
+  assert(!listed.some((x) => x.id === l.id), 'kupione ogłoszenie znika z listy');
+  return { listing: l, deal: d };
 }
 
-async function shippedOrder(buyer: Actor, seller: Actor, windowSecs: number) {
-  let o = await fundedOrder(buyer, seller, windowSecs);
-  await expectError('INVALID_STATE', 409, 'POST', `/api/orders/${o.id}/tx/prepare`, { token: seller.token, body: { action: 'commit_shipment' } });
-  const seal = await call(SealSchema, 'POST', `/api/orders/${o.id}/seal`, { token: seller.token, expect: 201 });
-  assert(seal.qrPayload && sealHash(seal.qrPayload) === seal.sealHash, 'plomba: sealHash = sha256(qrPayload)');
-  const again = await call(SealSchema, 'POST', `/api/orders/${o.id}/seal`, { token: seller.token });
-  assert(again.sealHash === seal.sealHash, 'plomba idempotentna');
-  const asBuyer = await call(OrderSchema, 'GET', `/api/orders/${o.id}`, { token: buyer.token });
-  assert(asBuyer.seal && !asBuyer.seal.qrPayload, 'kupujący nie widzi qrPayload');
-
-  const up = await call(VideoUploadResponseSchema, 'POST', `/api/orders/${o.id}/packing-video`,
-    { token: seller.token, form: videoForm({ productShownMs: 2000, sealShownMs: 15000 }), expect: 202 });
-  o = await call(OrderSchema, 'GET', `/api/orders/${o.id}`, { token: seller.token });
-  assert(o.status === 'packing_review', `po uploadzie pakowania: ${o.status}`);
-  const v = await waitVerification(seller, up.verificationId);
-  assert(v.status === 'done' && v.report?.kind === 'packing' && v.report.videoSha256 === up.videoSha256, `raport pakowania: ${v.status} ${v.error ?? ''}`);
-  o = await call(OrderSchema, 'GET', `/api/orders/${o.id}`, { token: seller.token });
-  assert(o.status === 'ready_to_ship', `po raporcie pakowania: ${o.status}`);
-
-  o = await tx(seller, o.id, 'commit_shipment');
-  assert(o.chainStatus === 'Shipped' && o.status === 'shipped' && o.openDeadline != null, `po commit_shipment: ${o.status}`);
-  return o;
+async function shippedDeal(seller: Actor, buyer: Actor, stranger: Actor) {
+  const { deal } = await paidDeal(seller, buyer, stranger);
+  const secret = newQrSecret();
+  const video = await upload(seller, 'video/mp4');
+  const body = { qrCommitment: shipCommitment(deal.id, secret), packingVideoSha256: video.sha256, trackingNumber: 'INP0001' };
+  await expectError('FORBIDDEN', 'POST', `/api/deals/${deal.id}/ship`, { token: buyer.token, body });
+  await expectError('FORBIDDEN', 'POST', `/api/deals/${deal.id}/ship`, { token: stranger.token, body });
+  const foreignVideo = await upload(buyer, 'video/mp4');
+  await expectError('VALIDATION', 'POST', `/api/deals/${deal.id}/ship`, { token: seller.token, body: { ...body, packingVideoSha256: foreignVideo.sha256 } });
+  await expectError('INVALID_STATE', 'POST', `/api/deals/${deal.id}/accept`, { token: buyer.token, body: { qrSecret: secret } });
+  const d = await act(seller, deal.id, 'ship', body);
+  assert(d.status === 'Shipped' && d.packingVideoSha256 === video.sha256 && d.trackingNumber === 'INP0001', `po nadaniu: ${d.status}`);
+  await expectError('INVALID_STATE', 'POST', `/api/deals/${deal.id}/ship`, { token: seller.token, body });
+  return { deal: d, secret };
 }
 
-async function scenario(name: DemoScenario, buyer: Actor, seller: Actor, windowSecs: number) {
-  let o = await shippedOrder(buyer, seller, windowSecs);
-  const pickupWeight = name === 'swap' ? 620 : 905;
-  await call(OrderSchema, 'POST', `/api/orders/${o.id}/locker-event`, { token: seller.token, body: { type: 'dropped_off', lockerId: 'KRA01M', weightG: 900 } });
-  o = await call(OrderSchema, 'POST', `/api/orders/${o.id}/locker-event`, { token: buyer.token, body: { type: 'ready_for_pickup', lockerId: 'KRA01M', weightG: pickupWeight } });
-  assert(o.status === 'delivered', `po ready_for_pickup: ${o.status}`);
-
-  const up = await call(VideoUploadResponseSchema, 'POST', `/api/orders/${o.id}/unboxing-video`, {
-    token: buyer.token, headers: { 'X-Demo-Scenario': name }, expect: 202,
-    form: videoForm({ sealShownMs: 1000, openStartMs: 5000, productShownMs: 9000 }),
-  });
-  const v = await waitVerification(buyer, up.verificationId);
-  assert(v.status === 'done' && v.report?.kind === 'unboxing', `raport otwarcia: ${v.status} ${v.error ?? ''}`);
-
-  if (name === 'invalid_recording') {
-    assert(!v.report!.recordingValid, 'invalid_recording → recordingValid = false');
-    await expectError('RECORDING_INVALID', 409, 'POST', `/api/orders/${o.id}/tx/prepare`, { token: buyer.token, body: { action: 'open_claim' } });
-    // Kupujący nie zgłasza ważnego wyniku → po open_deadline każdy może wywołać claim_timeout (OpenTimeout).
-    await expectError('INVALID_STATE', 409, 'POST', `/api/orders/${o.id}/tx/prepare`, { token: seller.token, body: { action: 'claim_timeout' } });
-    await advanceOrWait(windowSecs + 2);
-    o = await tx(seller, o.id, 'claim_timeout');
-    return expectOutcome(o, 'released', 'OpenTimeout');
-  }
-
-  o = await tx(buyer, o.id, 'open_claim');
-  assert(o.chainStatus === 'Verifying' || o.chainStatus === 'Released' || o.chainStatus === 'Refunded', `po open_claim: ${o.chainStatus}`);
-  assert(o.unboxingVideoHash === up.videoSha256, 'unboxingVideoHash on-chain = hasz uploadu');
-  o = await waitOrder(buyer, o.id, (x) => x.status === 'released' || x.status === 'refunded', 'rozstrzygnięcie przez program');
-  assert(o.txs.some((t) => t.action === 'submit_verdict'), 'wyrocznia wysłała submit_verdict');
-  assert(o.measurements, 'pomiary zapisane on-chain');
-  const expected: Record<Exclude<DemoScenario, 'invalid_recording'>, ['released' | 'refunded', OutcomeReason]> = {
-    ok: ['released', 'VerifiedOk'], defect: ['refunded', 'ItemMismatch'], swap: ['refunded', 'TransitBroken'],
-  };
-  return expectOutcome(o, ...expected[name]);
+async function disputedDeal(seller: Actor, buyer: Actor, stranger: Actor, scenario: string) {
+  const { deal, secret } = await shippedDeal(seller, buyer, stranger);
+  const video = await upload(buyer, 'video/mp4');
+  const body = { qrSecret: secret, unboxingVideoSha256: video.sha256, complaint: { category: 'damaged', description: 'Plama na rękawie' } };
+  await expectError('QR_MISMATCH', 'POST', `/api/deals/${deal.id}/dispute`, { token: buyer.token, body: { ...body, qrSecret: newQrSecret() } });
+  await expectError('FORBIDDEN', 'POST', `/api/deals/${deal.id}/dispute`, { token: seller.token, body });
+  const d = await act(buyer, deal.id, 'dispute', body, { 'X-Demo-Scenario': scenario });
+  assert(d.status === 'Disputed' && d.unboxingVideoSha256 === video.sha256 && d.complaint?.category === 'damaged', `po reklamacji: ${d.status}`);
+  assert(d.complaintHash === hashDocument(d.complaint), 'complaintHash = sha256(canonicalJson(complaint))');
+  await expectError('INVALID_STATE', 'POST', `/api/deals/${deal.id}/accept`, { token: buyer.token, body: { qrSecret: secret } });
+  return { deal: d, secret };
 }
 
-function expectOutcome(o: Order, status: 'released' | 'refunded', reason: OutcomeReason) {
-  assert(o.status === status && o.outcomeReason === reason, `wynik: ${o.status}/${o.outcomeReason}, oczekiwano ${status}/${reason}`);
-  assert(o.listing.status === (status === 'released' ? 'sold' : 'active'), `oferta po rozstrzygnięciu: ${o.listing.status}`);
-  return o;
+/** Analiza zakończona: raport zapisany, werdykt = decide(raport), stan zmieniony przez backend. */
+async function resolved(buyer: Actor, id: string) {
+  const d = await waitAnalysis(buyer, id, (x) => x.status !== 'Disputed', 'rozstrzygnięcie reklamacji');
+  const a = d.analysis;
+  assert(a?.status === 'done' && a.report && a.verdict && a.model && a.promptVersion, 'raport AI zapisany w transakcji');
+  assert(a.reportHash === hashDocument(a.report), 'reportHash = sha256(canonicalJson(report))');
+  assert(d.verdict === a.verdict, 'werdykt transakcji = werdykt z analizy');
+  return d;
 }
 
-async function shipTimeout(buyer: Actor, seller: Actor, windowSecs: number) {
-  let o = await fundedOrder(buyer, seller, windowSecs);
-  await advanceOrWait(windowSecs + 2);
-  o = await tx(buyer, o.id, 'claim_timeout');
-  return expectOutcome(o, 'refunded', 'ShipTimeout');
+async function returnFlow(seller: Actor, buyer: Actor, stranger: Actor, id: string) {
+  const secret = newQrSecret();
+  const video = await upload(buyer, 'video/mp4');
+  const body = { returnQrCommitment: returnCommitment(id, secret), returnVideoSha256: video.sha256, returnTrackingNumber: 'INP0002' };
+  await expectError('FORBIDDEN', 'POST', `/api/deals/${id}/return`, { token: seller.token, body });
+  let d = await act(buyer, id, 'return', body);
+  assert(d.status === 'Returning', `po odesłaniu: ${d.status}`);
+  await expectError('QR_MISMATCH', 'POST', `/api/deals/${id}/confirm-return`, { token: seller.token, body: { returnQrSecret: newQrSecret() } });
+  await expectError('FORBIDDEN', 'POST', `/api/deals/${id}/confirm-return`, { token: stranger.token, body: { returnQrSecret: secret } });
+  d = await act(seller, id, 'confirm-return', { returnQrSecret: secret });
+  return d;
 }
 
-async function sellerDecline(buyer: Actor, seller: Actor, windowSecs: number) {
-  let o = await fundedOrder(buyer, seller, windowSecs);
-  await expectError('FORBIDDEN', 403, 'POST', `/api/orders/${o.id}/tx/prepare`, { token: buyer.token, body: { action: 'seller_decline' } });
-  await expectError('FORBIDDEN', 403, 'POST', `/api/orders/${o.id}/tx/prepare`, { token: seller.token, body: { action: 'submit_verdict' } });
-  o = await tx(seller, o.id, 'seller_decline');
-  expectOutcome(o, 'refunded', 'SellerDeclined');
-  await expectError('INVALID_STATE', 409, 'POST', `/api/orders/${o.id}/tx/prepare`, { token: buyer.token, body: { action: 'confirm_receipt' } });
-  return o;
+// ---------- scenariusze ----------
+
+type Ctx = { seller: Actor; buyer: Actor; stranger: Actor };
+
+async function confirmReceipt({ seller, buyer, stranger }: Ctx) {
+  const sellerBefore = await balance(seller);
+  const { deal, secret } = await shippedDeal(seller, buyer, stranger);
+  await expectError('QR_MISMATCH', 'POST', `/api/deals/${deal.id}/accept`, { token: buyer.token, body: { qrSecret: newQrSecret() } });
+  await expectError('FORBIDDEN', 'POST', `/api/deals/${deal.id}/accept`, { token: stranger.token, body: { qrSecret: secret } });
+  const d = await act(buyer, deal.id, 'accept', { qrSecret: secret });
+  expectClosed(d, 'Completed', 'accepted');
+  assert(await balance(seller) === sellerBefore + deal.payment.amountMinor, 'sprzedający dostał środki');
+  // drugie rozliczenie niemożliwe
+  await expectError('INVALID_STATE', 'POST', `/api/deals/${deal.id}/accept`, { token: buyer.token, body: { qrSecret: secret } });
+  await expectError('INVALID_STATE', 'POST', `/api/deals/${deal.id}/settle`, { token: buyer.token });
+  assert(await balance(seller) === sellerBefore + deal.payment.amountMinor, 'brak podwójnej wypłaty');
+  return d;
 }
 
-async function confirmReceipt(buyer: Actor, seller: Actor, windowSecs: number) {
-  let o = await shippedOrder(buyer, seller, windowSecs);
-  o = await tx(buyer, o.id, 'confirm_receipt');
-  return expectOutcome(o, 'released', 'BuyerConfirmed');
+async function disputeSellerWins(ctx: Ctx, scenario: 'ok' | 'swap' | 'invalid_recording') {
+  const { deal } = await disputedDeal(ctx.seller, ctx.buyer, ctx.stranger, scenario);
+  const d = await resolved(ctx.buyer, deal.id);
+  assert(d.verdict === 'SELLER', `werdykt ${d.verdict}, oczekiwano SELLER`);
+  expectClosed(d, 'Completed', 'verdict_seller');
+  if (scenario === 'swap') assert(d.analysis!.report!.package_matches_shipping_recording === false, 'pomiar: paczka niezgodna z nadaną');
+  if (scenario === 'invalid_recording') assert(d.analysis!.report!.buyer_recording.continuous === false, 'pomiar: nagranie nieciągłe');
+  return d;
+}
+
+async function defect({ seller, buyer, stranger }: Ctx) {
+  const buyerBefore = await balance(buyer);
+  const { deal } = await disputedDeal(seller, buyer, stranger, 'defect');
+  let d = await resolved(buyer, deal.id);
+  assert(d.verdict === 'BUYER' && d.status === 'ReturnRequested' && d.payment.status === 'secured', `po werdykcie: ${d.status}`);
+  assert(d.analysis!.report!.undisclosed_damage.present, 'pomiar: nieujawniona wada');
+  d = await returnFlow(seller, buyer, stranger, deal.id);
+  expectClosed(d, 'Refunded', 'return_confirmed');
+  assert(await balance(buyer) === buyerBefore, 'kupujący odzyskał środki');
+  await expectError('INVALID_STATE', 'POST', `/api/deals/${deal.id}/confirm-return`, { token: seller.token, body: { returnQrSecret: newQrSecret() } });
+  assert(await balance(buyer) === buyerBefore, 'brak podwójnego zwrotu');
+  return d;
+}
+
+async function shipTimeout({ seller, buyer, stranger }: Ctx) {
+  const buyerBefore = await balance(buyer);
+  const { deal } = await paidDeal(seller, buyer, stranger);
+  await expectError('DEADLINE_NOT_REACHED', 'POST', `/api/deals/${deal.id}/settle`, { token: buyer.token });
+  await advance(timeouts.Paid - 5);
+  assert((await getDeal(buyer, deal.id)).status === 'Paid', 'przed terminem nadal Paid');
+  await advance(10);
+  const d = await getDeal(buyer, deal.id);           // leniwe domknięcie przy odczycie
+  expectClosed(d, 'Refunded', 'ship_timeout');
+  assert(await balance(buyer) === buyerBefore, 'zwrot po terminie nadania');
+  const late = await upload(seller, 'video/mp4');
+  await expectError('INVALID_STATE', 'POST', `/api/deals/${deal.id}/ship`, { token: seller.token,
+    body: { qrCommitment: 'a'.repeat(64), packingVideoSha256: late.sha256, trackingNumber: 'INP0003' } });
+  return d;
+}
+
+async function unboxAndReturnTimeouts({ seller, buyer, stranger }: Ctx) {
+  const { deal } = await shippedDeal(seller, buyer, stranger);
+  await advance(timeouts.Shipped);
+  expectClosed(await act(buyer, deal.id, 'settle'), 'Completed', 'unbox_timeout');
+  const { deal: d2 } = await disputedDeal(seller, buyer, stranger, 'defect');
+  await resolved(buyer, d2.id);
+  await advance(timeouts.ReturnRequested);
+  const d = await getDeal(seller, d2.id);
+  expectClosed(d, 'Completed', 'return_ship_timeout');
+  return d;
+}
+
+/** Błędny raport albo raport o innych nagraniach nie zmienia stanu; po terminie oceny: neutralny zwrot towaru. */
+async function invalidReport(ctx: Ctx, scenario: 'invalid_report' | 'wrong_evidence' | 'ai_down') {
+  const { deal } = await disputedDeal(ctx.seller, ctx.buyer, ctx.stranger, scenario);
+  let d = await waitAnalysis(ctx.buyer, deal.id, (x) => x.analysis?.status === 'failed', 'analiza: failed');
+  assert(d.status === 'Disputed' && d.verdict === null && d.payment.status === 'secured', `stan po błędnym raporcie: ${d.status}`);
+  assert(d.analysis!.report === null && d.analysis!.error, 'raport odrzucony, błąd zapisany');
+  await advance(timeouts.Disputed);
+  d = await getDeal(ctx.buyer, deal.id);
+  assert(d.status === 'ReturnRequested' && d.verdict === null && d.payment.status === 'secured', `po terminie oceny: ${d.status}`);
+  return d;
+}
+
+async function cancelListing({ seller, buyer, stranger }: Ctx) {
+  const l = await newListing(seller);
+  await expectError('FORBIDDEN', 'POST', `/api/listings/${l.id}/cancel`, { token: buyer.token });
+  const edited = await call(ListingSchema, 'PATCH', `/api/listings/${l.id}`, { token: seller.token, body: { priceMinor: 9_900 } });
+  assert(edited.priceMinor === 9_900, 'edycja przed zakupem');
+  const c = await call(ListingSchema, 'POST', `/api/listings/${l.id}/cancel`, { token: seller.token });
+  assert(c.status === 'Cancelled', 'anulowane');
+  await expectError('INVALID_STATE', 'POST', `/api/listings/${l.id}/purchase`, { token: buyer.token });
+  await expectError('INVALID_STATE', 'POST', `/api/listings/${l.id}/cancel`, { token: seller.token });
+  const { listing: sold } = await paidDeal(seller, buyer, stranger);
+  await expectError('INVALID_STATE', 'POST', `/api/listings/${sold.id}/cancel`, { token: seller.token });
+  return { status: 'Cancelled', closeReason: null, id: l.id } as unknown as Deal;
 }
 
 // ---------- main ----------
 
 const health = await call(HealthSchema, 'GET', '/api/health');
-console.log(`API ${API}: chain=${health.chain} ai=${health.ai} cluster=${health.cluster} programId=${health.programId}`);
-const isMock = health.cluster === 'mock';
-// Oczekiwania scenariuszy wymagają AI=mock (nagłówek X-Demo-Scenario). Przy AI=http wynik zależy od treści
-// nagrania i plomby zamówienia, więc e2e z prawdziwym AI robimy na żywych nagraniach (M3), nie tym skryptem.
-if (health.ai.startsWith('http')) {
-  console.error('contract-test wymaga AI=mock (CHAIN=mock albo CHAIN=devnet). Dla AI=http użyj e2e na telefonach (M3).');
-  process.exit(2);
-}
-const W = isMock ? 1800 : Number(process.env.TEST_WINDOW_SECS ?? 60);   // devnet: krótkie okna, żeby timeout dało się poczekać
+timeouts = health.timeouts === 'prod' ? TIMEOUTS_PROD : TIMEOUTS_DEMO;
+console.log(`API ${API}: ai=${health.ai} timeouts=${health.timeouts}`);
+if (!health.ai.startsWith('mock')) { console.error('contract-test wymaga AI=mock (scenariusze przez X-Demo-Scenario)'); process.exit(2); }
+const clock = await fetch(`${API}/api/dev/clock`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"advanceSecs":0}' });
+if (clock.status !== 200) { console.error('contract-test wymaga zegara testowego (ENABLE_DEV_CLOCK=1 albo NODE_ENV=test)'); process.exit(2); }
 
 await call(z.array(z.any()), 'GET', '/api/categories');
-await call(z.array(ListingSchema), 'GET', '/api/listings');
-await expectError('UNAUTHORIZED', 401, 'GET', '/api/me');
-await expectError('NOT_FOUND', 404, 'GET', '/api/listings/nie-ma');
-const seller = await login('ania@demo.pl', 'seller');
-const buyer = await login('bartek@demo.pl', 'buyer');
+await expectError('UNAUTHORIZED', 'GET', '/api/me');
+await expectError('NOT_FOUND', 'GET', '/api/listings/nie-ma');
+await expectError('VALIDATION', 'POST', '/api/listings', { token: (await login('ania@demo.pl')).token, body: { title: 'x' } });
+const ctx: Ctx = { seller: await login('ania@demo.pl'), buyer: await login('bartek@demo.pl'), stranger: await login('celina@demo.pl') };
 
-const cases: [string, () => Promise<unknown>][] = [
-  ['ok', () => scenario('ok', buyer, seller, W)],
-  ['defect', () => scenario('defect', buyer, seller, W)],
-  ['swap', () => scenario('swap', buyer, seller, W)],
-  ['invalid_recording', () => scenario('invalid_recording', buyer, seller, W)],
-  ['ship_timeout', () => shipTimeout(buyer, seller, W)],
-  ['seller_decline', () => sellerDecline(buyer, seller, W)],
-  ['confirm_receipt', () => confirmReceipt(buyer, seller, W)],
+const cases: [string, () => Promise<Deal>][] = [
+  ['confirm_receipt', () => confirmReceipt(ctx)],
+  ['ok', () => disputeSellerWins(ctx, 'ok')],
+  ['defect', () => defect(ctx)],
+  ['swap', () => disputeSellerWins(ctx, 'swap')],
+  ['invalid_recording', () => disputeSellerWins(ctx, 'invalid_recording')],
+  ['ship_timeout', () => shipTimeout(ctx)],
+  ['unbox_return_timeouts', () => unboxAndReturnTimeouts(ctx)],
+  ['invalid_report', () => invalidReport(ctx, 'invalid_report')],
+  ['wrong_evidence', () => invalidReport(ctx, 'wrong_evidence')],
+  ['ai_down', () => invalidReport(ctx, 'ai_down')],
+  ['cancel_listing', () => cancelListing(ctx)],
 ];
 
 let failed = 0;
@@ -264,11 +292,11 @@ for (const [name, run] of cases) {
   if (only && !only.includes(name)) continue;
   const t0 = Date.now();
   try {
-    const o = (await run()) as Order;
-    console.log(`  ✓ ${name.padEnd(18)} ${o.status}/${o.outcomeReason}  ${((Date.now() - t0) / 1000).toFixed(1)} s  ${o.id}`);
+    const d = await run();
+    console.log(`  ✓ ${name.padEnd(22)} ${d.status}${d.closeReason ? `/${d.closeReason}` : ''}  ${((Date.now() - t0) / 1000).toFixed(1)} s`);
   } catch (e) {
     failed++;
-    console.log(`  ✗ ${name.padEnd(18)} ${(e as Error).message}`);
+    console.log(`  ✗ ${name.padEnd(22)} ${(e as Error).message}`);
   }
 }
 console.log(failed ? `\n${failed} nieudanych` : '\nWszystko zielone');

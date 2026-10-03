@@ -35,7 +35,7 @@ export function receiveUpload(c: Context, fileField: string): Promise<SavedUploa
       const hash = createHash('sha256');
       let size = 0;
       const tap = new Transform({ transform(chunk, _e, cb) { hash.update(chunk); size += chunk.length; cb(null, chunk); } });
-      stream.on('limit', () => fail(new ApiErr('VALIDATION', 'Plik większy niż 50 MB', 413)));
+      stream.on('limit', () => fail(new ApiErr('VALIDATION', 'Plik większy niż 60 MB', 413)));
       file = pipeline(stream, tap, fs.createWriteStream(tmpPath)).then(() => {
         if (failed) { fs.rmSync(tmpPath, { force: true }); throw new Error('aborted'); }
         return { tmpPath, sha256: hash.digest('hex'), size, mimeType: info.mimeType, filename: info.filename };

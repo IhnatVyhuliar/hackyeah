@@ -1,87 +1,47 @@
-// AI=mock: raporty z packages/shared/fixtures/reports.json według scenariusza (domyślnie "ok"), po ok. 3 s.
-// Gdy fixtures jeszcze nie ma, używa wbudowanych raportów o tym samym kształcie.
-import fs from 'node:fs';
-import path from 'node:path';
-import { type DemoScenario, type VerificationReport, VerificationReportSchema } from '@sellsol/shared';
+// AI=mock: gotowe raporty według scenariusza (domyślnie "ok"), po MOCK_AI_DELAY_MS. Do testów i demo bez AI.
+import type { OracleReport } from '@unbox/shared';
 import { config } from '../config';
-import type { AiAdapter, AnalyzeInput } from './types';
+import type { AiAdapter, DisputeEvidence, MockScenario } from './types';
 
-type Key = 'packing' | DemoScenario;
-
-function base(kind: 'packing' | 'unboxing'): VerificationReport {
-  return {
-    kind, orderId: '', videoSha256: '0'.repeat(64), durationMs: 24_000,
-    seal: { detected: true, payloadMatch: true, firstSeenMs: 1200, lastSeenSealedMs: kind === 'packing' ? 22_000 : 6000, intact: true },
-    continuity: { ok: true, sceneCutsMs: [], timestampGaps: [], maxSealGapMs: 400, issues: [] },
-    productVisible: true, defects: [], extraTests: [{ testId: 't1', passed: true, note: 'Metka z rozmiarem M widoczna', frameMs: 9000 }],
-    recordingValid: true, packingOk: kind === 'packing' ? true : null,
-    measurements: kind === 'unboxing'
-      ? { recordingValid: true, qrMatch: true, sealIntact: true, packageScore: 88, matchScore: 91, defectFound: false, testsPassed: true }
-      : null,
-    keyframes: [], reasons: [], engine: { version: 'mock-0.1', llm: null, processingMs: 0 },
-  };
-}
-
-const BUILTIN: Record<Key, VerificationReport> = {
-  packing: { ...base('packing'), reasons: ['Nagranie ciągłe, plomba odczytana i zgodna, przedmiot widoczny.'] },
-  ok: { ...base('unboxing'), reasons: ['Plomba zgodna i nienaruszona, przedmiot zgodny z ofertą, brak wad.'] },
-  defect: {
-    ...base('unboxing'),
-    defects: [{ label: 'Plama na lewym rękawie', severity: 'major', frameMs: 14_000, confidence: 0.82 }],
-    measurements: { ...base('unboxing').measurements!, defectFound: true },
-    reasons: ['Wykryto nieujawnioną wadę: plama na lewym rękawie.'],
-  },
-  swap: {
-    ...base('unboxing'),
-    seal: { detected: true, payloadMatch: false, firstSeenMs: 1100, lastSeenSealedMs: 5800, intact: false },
-    measurements: { recordingValid: true, qrMatch: false, sealIntact: false, packageScore: 31, matchScore: 38, defectFound: false, testsPassed: false },
-    extraTests: [{ testId: 't1', passed: false, note: 'Nie pokazano metki z rozmiarem M' }],
-    reasons: ['Plomba nie pasuje do transakcji.', 'Paczka i przedmiot różnią się od nagrania pakowania.'],
-  },
-  invalid_recording: {
-    ...base('unboxing'),
-    continuity: { ok: false, sceneCutsMs: [7400], timestampGaps: [], maxSealGapMs: 3100, issues: ['Paczka poza kadrem przez 3,1 s'] },
-    recordingValid: false,
-    measurements: { ...base('unboxing').measurements!, recordingValid: false },
-    reasons: ['Nagranie nieciągłe: cięcie w 7,4 s i paczka poza kadrem przez 3,1 s. Nagraj ponownie.'],
-  },
+const good: OracleReport = {
+  buyer_recording: { continuous: true, starts_with_sealed_package: true, qr_revealed_on_opening: true, quality: 'good',
+                     notes: 'Nagranie ciągłe od zamkniętej paczki, QR widoczny po otwarciu.' },
+  seller_recording: { item_clearly_visible: true, qr_card_packed: true, package_sealed_and_labeled: true, quality: 'good',
+                      notes: 'Przedmiot dobrze widoczny, karta QR włożona, paczka zaklejona i oznaczona.' },
+  package_matches_shipping_recording: true,
+  item_matches_listing: true,
+  undisclosed_damage: { present: false, description: '', timestamps: [] },
+  reasoning: 'Przedmiot zgodny z ogłoszeniem, brak nieujawnionych wad.',
 };
 
-function loadFixtures(): Partial<Record<Key, VerificationReport>> {
-  const file = path.join(config.fixturesDir, 'reports.json');
-  if (!fs.existsSync(file)) return {};
-  try {
-    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as unknown;
-    const out: Partial<Record<Key, VerificationReport>> = {};
-    // Akceptujemy {packing, ok, defect, swap, invalid_recording} albo tablicę z polem "scenario".
-    const entries: [string, unknown][] = Array.isArray(raw)
-      ? raw.map((r: any) => [r.kind === 'packing' ? 'packing' : r.scenario, r.report ?? r])
-      : Object.entries(raw as object);
-    for (const [k, v] of entries) {
-      const r = VerificationReportSchema.safeParse(v);
-      if (r.success) out[k as Key] = r.data;
-      else console.warn(`[mockAi] reports.json: pomijam "${k}" (niezgodny ze schematem)`);
-    }
-    return out;
-  } catch (e) {
-    console.warn('[mockAi] nie udało się wczytać reports.json, używam wbudowanych raportów', e);
-    return {};
-  }
-}
+const REPORTS: Record<Exclude<MockScenario, 'invalid_report' | 'wrong_evidence' | 'ai_down'>, OracleReport> = {
+  ok: good,
+  defect: { ...good,
+    undisclosed_damage: { present: true, description: 'Plama na lewym rękawie, nieujawniona w ogłoszeniu.', timestamps: ['0:14'] },
+    reasoning: 'Na nagraniu otwarcia widać plamę na rękawie, której nie ma na liście wad.' },
+  not_as_described: { ...good, item_matches_listing: false,
+    reasoning: 'Rozmiar na metce (L) nie zgadza się z ogłoszeniem (M).' },
+  swap: { ...good, package_matches_shipping_recording: false, item_matches_listing: false,
+    reasoning: 'Paczka na nagraniu otwarcia ma inną taśmę i etykietę niż nadana przez sprzedającego.' },
+  invalid_recording: { ...good,
+    buyer_recording: { ...good.buyer_recording, continuous: false, quality: 'poor', notes: 'Cięcie w 0:07, paczka poza kadrem.' },
+    undisclosed_damage: { present: true, description: 'Możliwa plama', timestamps: ['0:20'] },
+    reasoning: 'Nagranie otwarcia nieciągłe, więc nie dowodzi stanu przy otwarciu.' },
+};
 
-const fixtures = loadFixtures();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-async function report(key: Key, i: AnalyzeInput): Promise<VerificationReport> {
-  await sleep(config.mockAiDelayMs);
-  const r = structuredClone(fixtures[key] ?? BUILTIN[key]);
-  return { ...r, orderId: i.order.id, videoSha256: i.videoSha256,
-           engine: { ...r.engine, processingMs: config.mockAiDelayMs } };
-}
 
 export const mockAi: AiAdapter = {
   kind: 'mock',
-  analyzePacking: (i) => report('packing', i),
-  analyzeUnboxing: (i) => report(i.scenario ?? 'ok', i),
-  health: async () => ({ ok: true, llm: null }),
+  async analyzeDispute(e: DisputeEvidence) {
+    await sleep(config.mockAiDelayMs);
+    const s = e.scenario ?? 'ok';
+    if (s === 'ai_down') throw new Error('Serwis AI niedostępny (scenariusz testowy)');
+    const evidence = { packing_video_sha256: e.packingVideo.sha256, unboxing_video_sha256: e.unboxingVideo.sha256 };
+    if (s === 'invalid_report') return { report: { reasoning: 'brak pól' }, model: 'mock', prompt_version: 'v1', evidence };
+    if (s === 'wrong_evidence')
+      return { report: REPORTS.defect, model: 'mock', prompt_version: 'v1', evidence: { ...evidence, unboxing_video_sha256: 'f'.repeat(64) } };
+    return { report: REPORTS[s], model: 'mock', prompt_version: 'v1', evidence };
+  },
+  health: async () => ({ ok: true, detail: 'mock' }),
 };

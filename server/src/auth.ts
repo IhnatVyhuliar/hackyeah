@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { createMiddleware } from 'hono/factory';
 import { jwtVerify, SignJWT } from 'jose';
-import type { User } from '@sellsol/shared';
+import type { User } from '@unbox/shared';
 import { config } from './config';
 import { users } from './db';
 import { ApiErr } from './errors';

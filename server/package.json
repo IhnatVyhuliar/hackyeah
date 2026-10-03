@@ -1,5 +1,5 @@
 {
-  "name": "@sellsol/server",
+  "name": "@unbox/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,8 +12,7 @@
   "dependencies": {
     "@hono/node-server": "^2.1.3",
     "@noble/hashes": "^2.4.0",
-    "@sellsol/shared": "*",
-    "@solana/web3.js": "1.99.0",
+    "@unbox/shared": "*",
     "bcryptjs": "^3.0.3",
     "busboy": "^1.6.0",
     "hono": "^4.13.12",

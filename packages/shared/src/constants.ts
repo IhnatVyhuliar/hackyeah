@@ -1,19 +1,41 @@
-import type { ConfigBounds, Thresholds, Windows } from './types';
+import type { ComplaintCategory, DealStatus } from './types';
 
-export const SOL_PLN_DEMO_RATE = 600;           // kurs poglądowy: 1 SOL = 600 zł
-export const LAMPORTS_PER_SOL = 1_000_000_000;
-export const DEFAULT_THRESHOLDS: Thresholds = { minMatchScore: 70, minPackageScore: 60, weightTolG: 150 };
-export const DEFAULT_WINDOWS: Windows = { shipWindowSecs: 1800, openWindowSecs: 1800 };
+export const CURRENCY = 'PLN' as const;
 export const POLL_MS = 2000;
-export const PORTS = { server: 4000, ai: 8000, metro: 8081, landing: 5173 } as const;
+export const PORTS = { server: 4000, oracle: 8000, metro: 8081 } as const;
+export const DEMO_START_BALANCE_MINOR = 100_000;   // 1000 zł na start dla kont demo
 
-export const SEAL_PREFIX = 'SELLSOL1';
-export const SYSTEM_PROGRAM_ID = '11111111111111111111111111111111';
-
-// Konfiguracja programu na devnecie (KONTRAKT §5.5); fakeChain używa tych samych wartości.
-export const DEMO_FEE_BPS = 100;
-export const DEMO_CONFIG_BOUNDS: ConfigBounds = {
-  minShipWindow: 60, maxShipWindow: 1_209_600,
-  minOpenWindow: 60, maxOpenWindow: 1_209_600,
-  verdictWindow: 600,
+/** Etykiety statusów (CLAUDE.md §6). */
+export const STATUS_LABELS_PL: Record<DealStatus, string> = {
+  Listed: 'Wystawione',
+  Paid: 'Opłacone – czeka na wysyłkę',
+  Shipped: 'W drodze',
+  Disputed: 'Reklamacja – trwa ocena',
+  ReturnRequested: 'Reklamacja uznana – odeślij paczkę',
+  Returning: 'Zwrot w drodze',
+  Completed: 'Zakończone – środki u sprzedającego',
+  Refunded: 'Środki zwrócone kupującemu',
+  Cancelled: 'Anulowane',
 };
+
+export const COMPLAINT_LABELS_PL: Record<ComplaintCategory, string> = {
+  damaged: 'Uszkodzony przedmiot',
+  not_as_described: 'Niezgodny z opisem',
+  wrong_item: 'Inny przedmiot',
+  missing_item: 'Brak przedmiotu w paczce',
+  other: 'Inny problem',
+};
+
+export type TimedStatus = 'Paid' | 'Shipped' | 'Disputed' | 'ReturnRequested' | 'Returning';
+export type Timeouts = Record<TimedStatus, number>;   // sekundy
+
+/** Terminy (CLAUDE.md §4). Wersja demo jest domyślna na hackathonie. */
+export const TIMEOUTS_DEMO: Timeouts = {
+  Paid: 10 * 60, Shipped: 60 * 60, Disputed: 10 * 60, ReturnRequested: 10 * 60, Returning: 10 * 60,
+};
+export const TIMEOUTS_PROD: Timeouts = {
+  Paid: 3 * 86400, Shipped: 7 * 86400, Disputed: 86400, ReturnRequested: 3 * 86400, Returning: 7 * 86400,
+};
+
+export const QR_PREFIX_SHIP = 'UNBOX1';
+export const QR_PREFIX_RETURN = 'UNBOX1R';

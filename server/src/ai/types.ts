@@ -1,17 +1,24 @@
-import type { DemoScenario, Hex32, Markers, Order, VerificationReport } from '@sellsol/shared';
+import type { Complaint, Deal } from '@unbox/shared';
 
-export interface AnalyzeInput {
-  order: Order;
-  videoPath: string;
-  videoSha256: Hex32;
-  markers: Markers;
-  scenario?: DemoScenario;           // tylko AI=mock (nagłówek X-Demo-Scenario)
+/** Scenariusze AI=mock (nagłówek X-Demo-Scenario przy reklamacji). Ostatnie trzy to awarie do testów. */
+export const MOCK_SCENARIOS = ['ok', 'defect', 'swap', 'invalid_recording', 'not_as_described',
+  'invalid_report', 'wrong_evidence', 'ai_down'] as const;
+export type MockScenario = typeof MOCK_SCENARIOS[number];
+
+export interface DisputeEvidence {
+  deal: Deal;
+  packingVideo: { sha256: string; url: string; path: string };
+  unboxingVideo: { sha256: string; url: string; path: string };
+  complaint: Complaint;
+  scenario?: MockScenario;
 }
 
-/** Serwis AI tylko mierzy. Nigdy nie zwraca "wypłać" ani "zwróć". */
+/**
+ * Serwis AI tylko mierzy: zwraca surową odpowiedź (raport + hasze ocenionych plików).
+ * Backend sam ją waliduje, sprawdza hasze i liczy werdykt przez decide().
+ */
 export interface AiAdapter {
   kind: 'mock' | 'http';
-  analyzePacking(i: AnalyzeInput): Promise<VerificationReport>;
-  analyzeUnboxing(i: AnalyzeInput): Promise<VerificationReport>;
-  health(): Promise<{ ok: boolean; llm: string | null }>;
+  analyzeDispute(e: DisputeEvidence): Promise<unknown>;
+  health(): Promise<{ ok: boolean; detail: string }>;
 }

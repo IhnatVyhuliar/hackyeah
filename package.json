@@ -1,5 +1,5 @@
 {
-  "name": "sellsol",
+  "name": "unbox",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -15,14 +15,13 @@
     "test": "npm test -w packages/shared",
     "dev:server": "npm run dev -w server",
     "contract-test": "tsx scripts/contract-test.ts",
-    "typecheck": "tsc -p packages/shared && tsc -p server"
+    "typecheck": "tsc -p packages/shared && tsc -p server && tsc -p scripts"
   },
   "devDependencies": {
     "@types/node": "^24.19.1",
     "tsx": "^4.23.15",
     "typescript": "~5.9.3",
-    "@sellsol/shared": "*",
-    "@solana/web3.js": "1.99.0",
+    "@unbox/shared": "*",
     "zod": "^4.6.5"
   }
 }
