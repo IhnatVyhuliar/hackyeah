@@ -132,3 +132,45 @@ describe("shipping, receiving and expiry", () => {
     await assert.rejects(settle(s, stranger), anchorCode("InvalidStatus"));
   });
 });
+
+describe("payout paths cannot be redirected or replayed", () => {
+  it("settle_expired and accept_delivery reject substituted payees", async () => {
+    const p = await createPaid();
+    const stranger = await funded();
+    await assert.rejects(settle({ ...p, buyer: stranger }, stranger), anchorCode("Unauthorized"));
+    const s = await createShipped();
+    await assert.rejects(settle({ ...s, seller: stranger }, stranger), anchorCode("Unauthorized"));
+    await assert.rejects(
+      program.methods.acceptDelivery(bytes32(s.secret))
+        .accountsPartial({ buyer: s.buyer.publicKey, deal: s.deal, seller: stranger.publicKey })
+        .signers([s.buyer]).rpc(),
+      anchorCode("Unauthorized"),
+    );
+  });
+
+  it("the buyer can be the caller of settle_expired (\"Odbierz środki\")", async () => {
+    const p = await createPaid();
+    await waitPastDeadline();
+    const before = await connection.getBalance(p.buyer.publicKey);
+    await settle(p, p.buyer);
+    assert.equal(statusOf(await program.account.deal.fetch(p.deal)), "refunded");
+    // The provider wallet pays tx fees in these tests, so the buyer gets exactly the price back.
+    assert.equal(await connection.getBalance(p.buyer.publicKey), before + p.price.toNumber());
+  });
+
+  it("a completed deal cannot be accepted or bought again", async () => {
+    const s = await createShipped();
+    await accept(s, s.buyer, s.secret);
+    await assert.rejects(accept(s, s.buyer, s.secret), anchorCode("InvalidStatus"));
+    await assert.rejects(buy(s, await funded(), s.listingHash, s.arbiter.publicKey), anchorCode("InvalidStatus"));
+  });
+
+  it("settle_expired cannot touch a listing that was never bought", async () => {
+    const l = await createListed();
+    const stranger = await funded();
+    const unbought = { deal: l.deal, seller: l.seller, buyer: { publicKey: anchor.web3.PublicKey.default } as anchor.web3.Keypair };
+    // deal.buyer is still Pubkey::default() (the System Program), which can never be writable.
+    await assert.rejects(settle(unbought, stranger), anchorCode("ConstraintMut"));
+    assert.equal(statusOf(await program.account.deal.fetch(l.deal)), "listed");
+  });
+});
