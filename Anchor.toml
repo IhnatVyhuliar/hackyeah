@@ -16,6 +16,6 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "node --test --test-concurrency=1 --disable-warning=ExperimentalWarning 'tests/*.test.ts'"
+test = "node --import tsx --test --test-concurrency=1 'tests/*.test.ts'"
 
 [hooks]

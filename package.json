@@ -2,13 +2,16 @@
   "name": "unboxproof",
   "private": true,
   "packageManager": "pnpm@9.15.9",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "sync-idl": "mkdir -p packages/shared/idl && cp target/idl/unbox_escrow.json target/types/unbox_escrow.ts packages/shared/idl/",
     "test:program": "anchor test"
   },
   "devDependencies": {
-    "@anchor-lang/core": "1.1.2"
+    "@anchor-lang/core": "1.1.2",
+    "tsx": "^4.23.15"
   },
   "pnpm": {
     "overrides": {
