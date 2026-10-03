@@ -1,0 +1,19 @@
+{
+  "name": "unboxproof",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "sync-idl": "mkdir -p packages/shared/idl && cp target/idl/unbox_escrow.json target/types/unbox_escrow.ts packages/shared/idl/",
+    "test:program": "anchor test"
+  },
+  "devDependencies": {
+    "@anchor-lang/core": "1.1.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "@anchor-lang/core": "1.1.2",
+      "@solana/web3.js": "1.99.0"
+    }
+  }
+}
