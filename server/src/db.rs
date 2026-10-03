@@ -94,6 +94,27 @@ pub fn user_by_email(c: &Connection, email: &str) -> ApiResult<Option<(User, Str
     Ok(row.map(|(d, h)| (serde_json::from_str(&d).expect("użytkownik w bazie"), h)))
 }
 
+/// Few users in this app, so a scan is fine; the address is unique (enforced in PUT /me/wallet-address).
+pub fn user_by_wallet(c: &Connection, address: &str) -> ApiResult<Option<User>> {
+    let mut st = c.prepare("SELECT data FROM users")?;
+    let rows = st.query_map([], |r| r.get::<_, String>(0))?;
+    for r in rows {
+        let u: User = serde_json::from_str(&r?).expect("użytkownik w bazie");
+        if u.wallet_address.as_deref() == Some(address) {
+            return Ok(Some(u));
+        }
+    }
+    Ok(None)
+}
+
+pub fn user_update(c: &Connection, u: &User) -> ApiResult<()> {
+    c.execute(
+        "UPDATE users SET data = ?2 WHERE id = ?1",
+        params![u.id, serde_json::to_string(u).expect("serializacja")],
+    )?;
+    Ok(())
+}
+
 pub fn user_insert(c: &Connection, u: &User, password_hash: &str) -> ApiResult<()> {
     c.execute(
         "INSERT INTO users (id, email, password_hash, data) VALUES (?1, ?2, ?3, ?4)",

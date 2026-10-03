@@ -113,6 +113,7 @@ pub fn purchase(state: &AppState, listing_id: &str, buyer: &User) -> ApiResult<D
                 label: "Kupujący zapłacił: środki zabezpieczone do zakończenia transakcji".into(),
             }],
             created_at: t,
+            onchain: None,
         };
         wallet::secure(c, &deal, t)?;
         l.status = ListingStatus::Sold;

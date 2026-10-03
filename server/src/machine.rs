@@ -547,6 +547,7 @@ mod tests {
             close_reason: None,
             timeline: vec![],
             created_at: T0,
+            onchain: None,
         }
     }
     fn run(d: &Deal, a: DealAction, now: i64) -> Result<TransitionResult, DealError> {

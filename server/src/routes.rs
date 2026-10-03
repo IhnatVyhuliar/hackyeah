@@ -16,12 +16,14 @@ use axum::body::{Body, Bytes};
 use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::json;
+use anchor_lang::prelude::Pubkey;
 use std::collections::HashMap;
+use std::str::FromStr;
 
 type Res = ApiResult<Response>;
 
@@ -71,6 +73,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/login", post(login))
         .route("/me", get(me))
         .route("/me/wallet", get(my_wallet))
+        .route("/me/wallet-address", put(set_wallet_address))
         .route("/me/listings", get(my_listings))
         .route("/categories", get(categories))
         .route("/listings", get(list_listings).post(create_listing))
@@ -220,6 +223,30 @@ async fn login(State(s): State<AppState>, b: Bytes) -> Res {
         return Err(ApiError::unauthorized("Zły e-mail albo hasło"));
     }
     ok(&json!({ "token": sign_token(&s, &user.id), "user": user }))
+}
+
+#[derive(Deserialize)]
+struct WalletAddressBody {
+    address: String,
+}
+
+/// Links the app's Solana wallet to the account; PAYMENTS=solana maps on-chain parties to users by it.
+async fn set_wallet_address(State(s): State<AppState>, AuthUser(mut u): AuthUser, b: Bytes) -> Res {
+    let i: WalletAddressBody = body(&b)?;
+    let address = i.address.trim().to_string();
+    Pubkey::from_str(&address).map_err(|_| ApiError::validation("address: niepoprawny adres portfela Solana"))?;
+    let mut conn = s.conn();
+    let user = db::tx(&mut conn, |c| {
+        if let Some(other) = db::user_by_wallet(c, &address)? {
+            if other.id != u.id {
+                return Err(ApiError::invalid_state("Ten portfel jest już podłączony do innego konta"));
+            }
+        }
+        u.wallet_address = Some(address);
+        db::user_update(c, &u)?;
+        Ok(u)
+    })?;
+    ok(&user)
 }
 
 async fn me(AuthUser(u): AuthUser) -> Res {
@@ -378,6 +405,7 @@ async fn create_listing(State(s): State<AppState>, AuthUser(u): AuthUser, b: Byt
         status: ListingStatus::Listed,
         created_at: t,
         updated_at: t,
+        onchain: None,
     };
     db::doc_put(&s.conn(), "listing", &l.id, &l)?;
     created(&l)
