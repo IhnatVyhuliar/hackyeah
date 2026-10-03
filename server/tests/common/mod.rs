@@ -1,6 +1,7 @@
 //! Wspólna infrastruktura testów: backend jako osobny proces (binarka) na tymczasowej bazie i wolnym porcie,
 //! klient HTTP i pomocnicze przepływy sklepu.
 #![allow(dead_code)]
+pub mod fake_rpc;
 
 use reqwest::{Method, StatusCode};
 use serde_json::{json, Value};
@@ -35,6 +36,7 @@ impl Backend {
             ("PORT", port.to_string()),
             ("DATA_DIR", dir.path().to_string_lossy().to_string()),
             ("AI", "mock".into()),
+            ("PAYMENTS", "demo".into()),
             ("MOCK_AI_DELAY_MS", "50".into()),
             ("AI_RETRY_MS", "50".into()),
             ("AI_MAX_ATTEMPTS", "1".into()),
