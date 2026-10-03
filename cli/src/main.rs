@@ -19,7 +19,8 @@ use unbox_escrow::{accounts, instruction};
 #[derive(Parser)]
 #[command(name = "unbox-cli", about = "Drive the SOL escrow flow without a phone (devnet/localnet only)")]
 struct Cli {
-    #[arg(long, env = "RPC_URL", default_value = "https://api.devnet.solana.com")]
+    /// The value is hidden in --help: a Helius URL carries an API key.
+    #[arg(long, env = "RPC_URL", hide_env_values = true, default_value = "https://api.devnet.solana.com")]
     rpc: String,
     #[arg(long, env = "API_URL", default_value = "http://localhost:4000")]
     api: String,
@@ -29,7 +30,7 @@ struct Cli {
     /// Account in server/ (demo: ania@demo.pl sells, bartek@demo.pl buys).
     #[arg(long, env = "EMAIL")]
     email: String,
-    #[arg(long, env = "PASSWORD", default_value = "demo1234")]
+    #[arg(long, env = "PASSWORD", hide_env_values = true, default_value = "demo1234")]
     password: String,
     #[command(subcommand)]
     cmd: Cmd,
@@ -44,10 +45,13 @@ enum Cmd {
         #[arg(long)]
         listing: String,
     },
-    /// Buyer: verify the description hash, then pay into escrow (purchase).
+    /// Buyer: verify the description hash and the arbiter, then pay into escrow (purchase).
     Buy {
         #[arg(long)]
         listing: String,
+        /// The arbiter (oracle key) you accept; the deal's arbiter must equal it.
+        #[arg(long, env = "ARBITER_PUBKEY")]
+        arbiter: String,
     },
     /// Seller: mark shipped; prints the QR payload for the card. Hashes the video, does not upload it.
     Ship {
@@ -146,8 +150,16 @@ fn report(cli: &Cli, api: &Api, deal: &Pubkey, signature: &str) -> Result<()> {
     Ok(())
 }
 
-fn main() -> Result<()> {
+fn main() {
     let cli = Cli::parse();
+    let rpc = cli.rpc.clone();
+    if let Err(e) = run(cli) {
+        eprintln!("Error: {}", redact(&format!("{e:#}"), &rpc));
+        std::process::exit(1);
+    }
+}
+
+fn run(cli: Cli) -> Result<()> {
     let payer =
         Rc::new(read_keypair_file(&cli.keypair).map_err(|e| anyhow!("cannot read keypair {}: {e}", cli.keypair))?);
     let me = payer.pubkey();
@@ -186,18 +198,16 @@ fn main() -> Result<()> {
                 .send()?;
             report(&cli, &api, &deal, &signature.to_string())
         }
-        Cmd::Buy { listing } => {
+        Cmd::Buy { listing, arbiter } => {
             let deal = api.deal_of(listing)?;
             let account: Deal = program.account(deal)?;
             println!("{}", verified_metadata(&api.http, &account.metadata_uri, &account.listing_hash)?);
-            println!("price:    {} lamports, arbiter {}", account.price_lamports, account.arbiter);
+            let arbiter = accepted_arbiter(&Pubkey::from_str(arbiter)?, &account.arbiter, &account.seller)?;
+            println!("price:    {} lamports, arbiter {arbiter}", account.price_lamports);
             let signature = program
                 .request()
                 .accounts(accounts::Purchase { buyer: me, deal, system_program: system_program::ID })
-                .args(instruction::Purchase {
-                    expected_listing_hash: account.listing_hash,
-                    expected_arbiter: account.arbiter,
-                })
+                .args(instruction::Purchase { expected_listing_hash: account.listing_hash, expected_arbiter: arbiter })
                 .send()?;
             report(&cli, &api, &deal, &signature.to_string())
         }
@@ -242,5 +252,51 @@ fn main() -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&api.get(&format!("/api/deals/{listing}"))?)?);
             Ok(())
         }
+    }
+}
+
+/// The buyer's own trusted arbiter must equal the one on the deal, and a seller may not judge their own sale.
+fn accepted_arbiter(expected: &Pubkey, on_chain: &Pubkey, seller: &Pubkey) -> Result<Pubkey> {
+    ensure!(on_chain == expected, "the deal names arbiter {on_chain}, not the one you accept ({expected})");
+    ensure!(on_chain != seller, "the seller is the arbiter of their own sale");
+    Ok(*expected)
+}
+
+/// Error text can contain the RPC URL (with an API key); never print it.
+fn redact(message: &str, rpc: &str) -> String {
+    if rpc.is_empty() {
+        message.to_string()
+    } else {
+        message.replace(rpc, "<rpc>")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn arbiter_must_match_the_buyers_choice_and_differ_from_the_seller() {
+        let (oracle, seller, other) = (Pubkey::new_unique(), Pubkey::new_unique(), Pubkey::new_unique());
+        assert_eq!(accepted_arbiter(&oracle, &oracle, &seller).unwrap(), oracle);
+        assert!(accepted_arbiter(&oracle, &other, &seller).is_err());
+        assert!(accepted_arbiter(&seller, &seller, &seller).is_err());
+    }
+
+    #[test]
+    fn rpc_url_is_redacted_from_errors() {
+        let rpc = "https://devnet.helius-rpc.com/?api-key=SECRET";
+        let msg = format!("error sending request for url ({rpc}): timed out");
+        assert_eq!(redact(&msg, rpc), "error sending request for url (<rpc>): timed out");
+        assert_eq!(redact("plain", ""), "plain");
+    }
+
+    #[test]
+    fn help_does_not_print_env_secrets() {
+        std::env::set_var("RPC_URL", "https://devnet.helius-rpc.com/?api-key=SECRET");
+        std::env::set_var("PASSWORD", "hunter2");
+        let help = Cli::command().render_long_help().to_string();
+        assert!(!help.contains("SECRET") && !help.contains("hunter2"), "{help}");
     }
 }
