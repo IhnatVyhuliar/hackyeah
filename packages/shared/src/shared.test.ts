@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TIMEOUTS_DEMO } from './constants';
 import { DealError, transition, availableActions, type DealAction } from './dealMachine';
 import {
-  canonicalJson, decide, formatPln, parsePln, parseQrPayload, qrPayload, returnCommitment, shipCommitment,
+  canonicalJson, createQr, decide, formatPln, parsePln, parseQrPayload, qrPayload, returnCommitment, shipCommitment, verifyQr,
 } from './helpers';
 import type { Deal, OracleReport } from './types';
 
@@ -18,6 +18,22 @@ describe('QR', () => {
     expect(parseQrPayload(qrPayload('return', DEAL, SECRET))).toEqual({ kind: 'return', dealId: DEAL, secret: SECRET });
     expect(parseQrPayload('UNBOX1:x:zz')).toBeNull();
     expect(() => shipCommitment(DEAL, 'AB')).toThrow();
+  });
+  it('round-trip: generate → encode → parse → verify', () => {
+    for (const kind of ['ship', 'return'] as const) {
+      const qr = createQr(kind, DEAL);
+      const parsed = parseQrPayload(qr.payload);
+      expect(parsed).toEqual({ kind, dealId: DEAL, secret: qr.secret });
+      expect(verifyQr(qr.payload, { kind, dealId: DEAL, commitment: qr.commitment })).toEqual({ ok: true, secret: qr.secret });
+      // ten sam sekret nie przejdzie jako kod drugiego rodzaju, innej transakcji ani innego commitmentu
+      expect(verifyQr(qr.payload, { kind: kind === 'ship' ? 'return' : 'ship', dealId: DEAL, commitment: qr.commitment }).ok).toBe(false);
+      expect(verifyQr(qr.payload, { kind, dealId: 'd-inny', commitment: qr.commitment }).ok).toBe(false);
+      expect(verifyQr(qr.payload, { kind, dealId: DEAL, commitment: createQr(kind, DEAL).commitment }).ok).toBe(false);
+    }
+    const ship = createQr('ship', DEAL);
+    const ret = returnCommitment(DEAL, ship.secret);
+    expect(ret).not.toBe(ship.commitment);           // separacja domen: sekret wysyłki ≠ commitment zwrotu
+    expect(verifyQr('nie-qr', { kind: 'ship', dealId: DEAL, commitment: ship.commitment }).ok).toBe(false);
   });
   it('canonicalJson sortuje klucze rekurencyjnie', () => {
     expect(canonicalJson({ b: 1, a: { d: [2, { y: 1, x: 0 }], c: 'ł' } })).toBe('{"a":{"c":"ł","d":[2,{"x":0,"y":1}]},"b":1}');

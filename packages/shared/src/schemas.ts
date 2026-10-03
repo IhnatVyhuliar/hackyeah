@@ -116,12 +116,27 @@ export const ConfirmReturnBodySchema = z.object({ returnQrSecret: Hex32Schema })
 export const AuthResponseSchema = z.object({ token: z.string(), user: UserSchema });
 export const HealthSchema = z.object({ ok: z.boolean(), ai: z.string(), timeouts: z.enum(['demo', 'prod']), version: z.string() });
 
-/** Odpowiedź serwisu AI (adapter httpAi): raport + metadane + hasze plików, które faktycznie ocenił. */
+// ---------- kontrakt backend ↔ wyrocznia (POST {AI_URL}/v1/disputes/analyze) ----------
+const EvidenceFile = z.object({ url: z.string(), sha256: Hex32Schema });
+/** Żądanie oceny reklamacji. Wyrocznia pobiera pliki z URL-i i sprawdza ich sha256. */
+export const OracleRequestSchema = z.object({
+  deal_id: z.string(),
+  listing: ListingMetadataSchema,           // treść ogłoszenia zamrożona przy zakupie (z listą wad i zdjęciami)
+  listing_hash: Hex32Schema,
+  tracking_number: z.string().nullable(),
+  packing_video: EvidenceFile,
+  unboxing_video: EvidenceFile,
+  complaint: ComplaintSchema,
+});
+export type OracleRequest = z.infer<typeof OracleRequestSchema>;
+
+/** Odpowiedź wyroczni: raport (pomiary) + metadane + hasze plików, które faktycznie oceniła. Bez werdyktu. */
 export const OracleResponseSchema = z.object({
   report: OracleReportSchema,
   model: z.string(), prompt_version: z.string(),
   evidence: z.object({ packing_video_sha256: Hex32Schema, unboxing_video_sha256: Hex32Schema }),
 });
+export type OracleResponse = z.infer<typeof OracleResponseSchema>;
 
 // Kontrola zgodności schematów z typami: błąd kompilacji, jeśli się rozjadą.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;

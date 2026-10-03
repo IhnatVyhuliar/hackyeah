@@ -62,6 +62,28 @@ export function parseQrPayload(payload: string): { kind: 'ship' | 'return'; deal
   return { kind: m[1] === QR_PREFIX_RETURN ? 'return' : 'ship', dealId: m[2], secret: m[3] };
 }
 
+/** Nowy kod QR dla transakcji: sekret, treść do wydruku i commitment, który trafia do backendu. */
+export function createQr(kind: 'ship' | 'return', dealId: string) {
+  const secret = newQrSecret();
+  const commitment = kind === 'ship' ? shipCommitment(dealId, secret) : returnCommitment(dealId, secret);
+  return { secret, payload: qrPayload(kind, dealId, secret), commitment };
+}
+
+/**
+ * Sprawdza zeskanowany QR względem transakcji: rodzaj, id transakcji i commitment.
+ * Zwraca sekret do wysłania w akcji (accept/dispute/confirm-return) albo powód odrzucenia.
+ */
+export function verifyQr(payload: string, expected: { kind: 'ship' | 'return'; dealId: string; commitment: Hex32 | null }):
+  { ok: true; secret: Hex32 } | { ok: false; reason: string } {
+  const p = parseQrPayload(payload);
+  if (!p) return { ok: false, reason: 'To nie jest kod QR tej aplikacji' };
+  if (p.kind !== expected.kind) return { ok: false, reason: expected.kind === 'ship' ? 'To kod zwrotu, a nie wysyłki' : 'To kod wysyłki, a nie zwrotu' };
+  if (p.dealId !== expected.dealId) return { ok: false, reason: 'Kod QR należy do innej transakcji' };
+  const c = p.kind === 'ship' ? shipCommitment(p.dealId, p.secret) : returnCommitment(p.dealId, p.secret);
+  if (!expected.commitment || c !== expected.commitment) return { ok: false, reason: 'Kod QR nie pasuje do tej przesyłki' };
+  return { ok: true, secret: p.secret };
+}
+
 // ---------- werdykt (CLAUDE.md §5) ----------
 
 /** Deterministyczny werdykt z raportu. Model AI tylko wypełnia raport; o wyniku decyduje ta funkcja. */

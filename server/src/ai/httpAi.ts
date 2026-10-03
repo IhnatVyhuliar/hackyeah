@@ -1,5 +1,6 @@
 // AI=http: adapter do serwisu wyroczni (Osoba 5). Wysyła dowody jako publiczne URL-e z haszami;
 // odpowiedź (OracleResponse) waliduje backend w disputes.ts. Tu nie ma logiki oceny.
+import type { OracleRequest } from '@unbox/shared';
 import { config } from '../config';
 import type { AiAdapter, DisputeEvidence } from './types';
 
@@ -7,7 +8,7 @@ export const httpAi: AiAdapter = {
   kind: 'http',
   async analyzeDispute(e: DisputeEvidence) {
     const { deal } = e;
-    const body = {
+    const body: OracleRequest = {
       deal_id: deal.id,
       listing: deal.listing,                       // ListingMetadata zamrożone przy zakupie (zdjęcia: url + sha256)
       listing_hash: deal.listingHash,
