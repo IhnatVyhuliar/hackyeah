@@ -24,7 +24,7 @@ uses in `expected.json` → `media`.
 | `unboxing-opened.mp4` | starts from an opened box, stain, no QR card | generated |
 | `unboxing-swap.mp4` | `unboxing-swap-raw.mp4` without the first 1.5 s | second shirt on the table from 00:00 |
 | `unboxing-stain-with-cut.mp4` | sealed box, QR, stain | **unusable for `stain`**: jump cut to a close-up at ~6.8 s |
-| `unboxing-stain.mp4` | **missing** — continuous unboxing with the stain, see `GENERATION.md` | |
+| `unboxing-stain.mp4` | sealed box, QR unfolded, shirt lifted from the box, stain close-up | `unboxing-stain-raw.mp4` without the first 0.9 s (generator started from the stained-shirt photo); an empty open box stands in the background |
 
 ## Run
 
