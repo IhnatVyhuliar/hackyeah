@@ -107,3 +107,14 @@ export async function createDisputed() {
   await openDispute(s, s.buyer, s.secret, videoHash, complaintHash);
   return { ...s, videoHash, complaintHash };
 }
+
+export const resolve = (d: { deal: Pk; seller: Kp }, signer: Kp, verdict: "seller" | "buyer" | "none",
+  reportHash = sha256(Buffer.from("report.json"))) =>
+  program.methods.resolveDispute({ [verdict]: {} } as any, bytes32(reportHash))
+    .accountsPartial({ arbiter: signer.publicKey, deal: d.deal, seller: d.seller.publicKey }).signers([signer]).rpc();
+
+export type Party = { deal: Pk; seller: Kp; buyer: Kp };
+export const settleExpired = (s: Party, caller: Kp) =>
+  program.methods.settleExpired()
+    .accountsPartial({ caller: caller.publicKey, deal: s.deal, seller: s.seller.publicKey, buyer: s.buyer.publicKey })
+    .signers([caller]).rpc();

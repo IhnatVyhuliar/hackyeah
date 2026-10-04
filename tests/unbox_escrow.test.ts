@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as anchor from "@anchor-lang/core";
 import {
   Keypair, anchorCode, bytes32, connection, createListed, createPaid, createShipped, dealPda, funded, program, sha256,
-  statusOf, waitPastDeadline,
+  settleExpired as settle, statusOf, waitPastDeadline, type Party,
 } from "./helpers";
 
 const buy = (l: { deal: anchor.web3.PublicKey }, who: anchor.web3.Keypair, hash: Uint8Array, arbiter: anchor.web3.PublicKey) =>
@@ -65,17 +65,10 @@ describe("listing and purchase", () => {
   });
 });
 
-type Party = { deal: anchor.web3.PublicKey; seller: anchor.web3.Keypair; buyer: anchor.web3.Keypair };
-
 const accept = (s: Party, who: anchor.web3.Keypair, secret: Uint8Array) =>
   program.methods.acceptDelivery(bytes32(secret))
     .accountsPartial({ buyer: who.publicKey, deal: s.deal, seller: s.seller.publicKey })
     .signers([who]).rpc();
-
-const settle = (s: Party, caller: anchor.web3.Keypair) =>
-  program.methods.settleExpired()
-    .accountsPartial({ caller: caller.publicKey, deal: s.deal, seller: s.seller.publicKey, buyer: s.buyer.publicKey })
-    .signers([caller]).rpc();
 
 describe("shipping, receiving and expiry", () => {
   it("happy path pays the seller exactly the price", async () => {
