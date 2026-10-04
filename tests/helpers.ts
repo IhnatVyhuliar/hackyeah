@@ -92,3 +92,18 @@ export async function waitPastDeadline() {
   if (res.error) throw new Error(`surfnet_timeTravel: ${JSON.stringify(res.error)}`);
   assert.ok((await chainNow()) >= target, "clock did not move");
 }
+
+type Shipped = Awaited<ReturnType<typeof createShipped>>;
+
+export const openDispute = (s: Shipped, who: Kp, secret: Uint8Array, videoHash = sha256(Buffer.from("unboxing.mp4")),
+  complaintHash = sha256(Buffer.from("complaint.json"))) =>
+  program.methods.openDispute(bytes32(secret), bytes32(videoHash), bytes32(complaintHash))
+    .accountsPartial({ buyer: who.publicKey, deal: s.deal }).signers([who]).rpc();
+
+export async function createDisputed() {
+  const s = await createShipped();
+  const videoHash = sha256(Buffer.from("unboxing.mp4"));
+  const complaintHash = sha256(Buffer.from("complaint.json"));
+  await openDispute(s, s.buyer, s.secret, videoHash, complaintHash);
+  return { ...s, videoHash, complaintHash };
+}
