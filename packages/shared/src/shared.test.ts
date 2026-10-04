@@ -6,6 +6,7 @@ import {
 } from './helpers';
 import type { Deal, OracleReport } from './types';
 import { EscrowError, isEscrowError } from './escrow';
+import { ApiErrorSchema, ListingSchema, OnChainDealSchema, UserSchema, WalletSchema } from './schemas';
 
 // Wektory QR (policzone niezależnie przez node:crypto): deal = "d-kurtka-levis", secret = 32 × 0xab.
 const DEAL = 'd-kurtka-levis';
@@ -140,5 +141,28 @@ describe('EscrowError', () => {
     expect(isEscrowError(e)).toBe(true);
     expect(isEscrowError({ name: 'EscrowError', code: 'Network', message: 'x' })).toBe(true);
     expect(isEscrowError(new Error('x'))).toBe(false);
+  });
+});
+
+describe('kształt API w trybie solana', () => {
+  const onchain = { deal: '4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw', dealId: 1, sellerWallet: 'x', listingHash: 'ab'.repeat(32),
+    metadataUri: 'http://x/api/listings/l-1/metadata.json', published: true };
+  const listing = { id: 'l-1', sellerId: 'u-ania', seller: { id: 'u-ania', name: 'Ania' }, title: 't', description: 'd',
+    categoryId: 'c', condition: 'dobry', brand: 'b', size: 'M', defects: [], photos: [], priceMinor: 60_000_000,
+    currency: 'SOL', status: 'Listed', createdAt: 1, updatedAt: 1 };
+
+  it('ogłoszenie w SOL z polem onchain, a bez onchain dalej przechodzi', () => {
+    expect(ListingSchema.parse({ ...listing, onchain }).onchain?.published).toBe(true);
+    expect(ListingSchema.parse(listing).onchain).toBeUndefined();
+  });
+  it('portfel z adresem i użytkownik z podpiętym portfelem', () => {
+    expect(WalletSchema.parse({ balanceMinor: 1, currency: 'SOL', heldMinor: 0, ledger: [], address: 'x' }).address).toBe('x');
+    expect(UserSchema.parse({ id: 'u', email: 'e', name: 'n', createdAt: 1, walletAddress: 'x' }).walletAddress).toBe('x');
+  });
+  it('transakcja z sygnaturami z łańcucha i błąd UPSTREAM', () => {
+    const tx = { status: 'Paid', at: 2, signature: 'sig', explorerUrl: 'https://explorer.solana.com/tx/sig?cluster=devnet' };
+    expect(OnChainDealSchema.parse({ deal: 'd', sellerWallet: 's', buyerWallet: 'b', priceLamports: 1, transactions: [tx] })
+      .transactions[0].signature).toBe('sig');
+    expect(ApiErrorSchema.parse({ error: { code: 'UPSTREAM', message: 'RPC' } }).error.code).toBe('UPSTREAM');
   });
 });

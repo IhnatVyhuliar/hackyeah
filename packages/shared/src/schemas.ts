@@ -5,22 +5,28 @@ import type * as T from './types';
 export const UnixSchema = z.int().nonnegative();
 export const Hex32Schema = z.string().regex(/^[0-9a-f]{64}$/, '64 znaki hex lowercase');
 export const MinorSchema = z.int().min(0).max(100_000_000);
-export const CurrencySchema = z.literal('PLN');
+export const CurrencySchema = z.enum(['PLN', 'SOL']);
 export const RoleSchema = z.enum(['buyer', 'seller']);
 
-export const UserSchema = z.object({ id: z.string(), email: z.string(), name: z.string(), createdAt: UnixSchema });
+export const UserSchema = z.object({
+  id: z.string(), email: z.string(), name: z.string(), createdAt: UnixSchema, walletAddress: z.string().optional(),
+});
 export const CategorySchema = z.object({ id: z.string(), slug: z.string(), name: z.string(), icon: z.string() });
 export const ConditionSchema = z.enum(['nowy', 'jak_nowy', 'dobry', 'widoczne_slady']);
 export const PhotoSchema = z.object({ url: z.string(), sha256: Hex32Schema });
 const Party = z.object({ id: z.string(), name: z.string() });
 
 export const ListingStatusSchema = z.enum(['Listed', 'Sold', 'Cancelled']);
+export const OnChainListingSchema = z.object({
+  deal: z.string(), dealId: z.number(), sellerWallet: z.string(), listingHash: Hex32Schema, metadataUri: z.string(),
+  published: z.boolean(),
+});
 export const ListingSchema = z.object({
   id: z.string(), sellerId: z.string(), seller: Party,
   title: z.string(), description: z.string(), categoryId: z.string(), condition: ConditionSchema,
   brand: z.string(), size: z.string(), defects: z.array(z.string()), photos: z.array(PhotoSchema),
   priceMinor: MinorSchema, currency: CurrencySchema, status: ListingStatusSchema,
-  createdAt: UnixSchema, updatedAt: UnixSchema,
+  createdAt: UnixSchema, updatedAt: UnixSchema, onchain: OnChainListingSchema.optional(),
 });
 export const CreateListingInputSchema = z.object({
   title: z.string().trim().min(3).max(120), description: z.string().max(4000),
@@ -74,6 +80,14 @@ export const CloseReasonSchema = z.enum(['accepted', 'verdict_seller', 'return_c
   'return_ship_timeout', 'return_confirm_timeout']);
 export const TimelineEventSchema = z.object({ at: UnixSchema, type: z.string(), label: z.string() });
 
+export const ChainTxSchema = z.object({
+  status: DealStatusSchema, at: UnixSchema, signature: z.string().nullable(), explorerUrl: z.string().nullable(),
+});
+export const OnChainDealSchema = z.object({
+  deal: z.string(), sellerWallet: z.string(), buyerWallet: z.string(), priceLamports: z.int().nonnegative(),
+  transactions: z.array(ChainTxSchema),
+});
+
 export const DealSchema = z.object({
   id: z.string(), listing: ListingMetadataSchema, listingHash: Hex32Schema,
   sellerId: z.string(), seller: Party, buyerId: z.string(), buyer: Party,
@@ -85,7 +99,7 @@ export const DealSchema = z.object({
   analysis: AnalysisSchema.nullable(), verdict: VerdictSchema.nullable(),
   returnQrCommitment: Hex32Schema.nullable(), returnVideoSha256: Hex32Schema.nullable(), returnTrackingNumber: z.string().nullable(),
   closeReason: CloseReasonSchema.nullable(),
-  timeline: z.array(TimelineEventSchema), createdAt: UnixSchema,
+  timeline: z.array(TimelineEventSchema), createdAt: UnixSchema, onchain: OnChainDealSchema.optional(),
 });
 
 export const MediaUploadSchema = z.object({ sha256: Hex32Schema, url: z.string(), size: z.int().nonnegative(), mimeType: z.string() });
@@ -95,10 +109,11 @@ export const LedgerEntrySchema = z.object({
 });
 export const WalletSchema = z.object({
   balanceMinor: z.int(), currency: CurrencySchema, heldMinor: z.int().nonnegative(), ledger: z.array(LedgerEntrySchema),
+  address: z.string().optional(),
 });
 
 export const ErrorCodeSchema = z.enum(['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND', 'VALIDATION', 'INVALID_STATE',
-  'DEADLINE_PASSED', 'DEADLINE_NOT_REACHED', 'QR_MISMATCH', 'INSUFFICIENT_FUNDS', 'AI_ERROR', 'INTERNAL']);
+  'DEADLINE_PASSED', 'DEADLINE_NOT_REACHED', 'QR_MISMATCH', 'INSUFFICIENT_FUNDS', 'AI_ERROR', 'UPSTREAM', 'INTERNAL']);
 export const ApiErrorSchema = z.object({ error: z.object({ code: ErrorCodeSchema, message: z.string() }) });
 
 // ---------- body akcji (API) ----------
@@ -117,6 +132,8 @@ export const AuthResponseSchema = z.object({ token: z.string(), user: UserSchema
 /** `ok` = backend i baza działają. `ai` = tryb i ostatni znany stan serwisu AI (bez odpytywania przy każdym wywołaniu). */
 export const HealthSchema = z.object({
   ok: z.boolean(), db: z.enum(['ok', 'error']), ai: z.string(), timeouts: z.enum(['demo', 'prod']), version: z.string(),
+  payments: z.enum(['demo', 'solana']).optional(),
+  chain: z.object({ programId: z.string(), cluster: z.string(), arbiter: z.string() }).loose().optional(),
 });
 
 // ---------- kontrakt backend ↔ wyrocznia (POST {AI_URL}/v1/disputes/analyze) ----------
@@ -149,6 +166,8 @@ assertSame<Same<z.infer<typeof ListingSchema>, T.Listing>>();
 assertSame<Same<z.infer<typeof CreateListingInputSchema>, T.CreateListingInput>>();
 assertSame<Same<z.infer<typeof ListingMetadataSchema>, T.ListingMetadata>>();
 assertSame<Same<z.infer<typeof DealSchema>, T.Deal>>();
+assertSame<Same<z.infer<typeof OnChainListingSchema>, T.OnChainListing>>();
+assertSame<Same<z.infer<typeof OnChainDealSchema>, T.OnChainDeal>>();
 assertSame<Same<z.infer<typeof OracleReportSchema>, T.OracleReport>>();
 assertSame<Same<z.infer<typeof AnalysisSchema>, T.Analysis>>();
 assertSame<Same<z.infer<typeof ComplaintSchema>, T.Complaint>>();

@@ -3,10 +3,10 @@
 export type Unix = number;          // sekundy
 export type Hex32 = string;         // 64 znaki hex lowercase (sha256)
 export type Minor = number;         // kwota w groszach (int)
-export type Currency = 'PLN';
+export type Currency = 'PLN' | 'SOL';   // PLN = PAYMENTS=demo (grosze), SOL = PAYMENTS=solana (lamporty)
 export type Role = 'buyer' | 'seller';
 
-export interface User { id: string; email: string; name: string; createdAt: Unix }
+export interface User { id: string; email: string; name: string; createdAt: Unix; walletAddress?: string }
 export interface Category { id: string; slug: string; name: string; icon: string }
 export type Condition = 'nowy' | 'jak_nowy' | 'dobry' | 'widoczne_slady';
 
@@ -23,6 +23,11 @@ export interface Listing {
   priceMinor: Minor; currency: Currency;
   status: ListingStatus;
   createdAt: Unix; updatedAt: Unix;
+  onchain?: OnChainListing;          // tylko PAYMENTS=solana, po POST /api/listings/{id}/publish
+}
+/** Argumenty create_listing zamrożone przez serwer; `published` = konto Deal istnieje on-chain. */
+export interface OnChainListing {
+  deal: string; dealId: number; sellerWallet: string; listingHash: Hex32; metadataUri: string; published: boolean;
 }
 export interface CreateListingInput {
   title: string; description: string; categoryId: string; condition: Condition;
@@ -93,14 +98,20 @@ export interface Deal {
   closeReason: CloseReason | null;
   timeline: TimelineEvent[];
   createdAt: Unix;
+  onchain?: OnChainDeal;             // tylko PAYMENTS=solana: odbicie konta Deal
+}
+/** Potwierdzona zmiana statusu w programie (sygnatura z łańcucha). */
+export interface ChainTx { status: DealStatus; at: Unix; signature: string | null; explorerUrl: string | null }
+export interface OnChainDeal {
+  deal: string; sellerWallet: string; buyerWallet: string; priceLamports: number; transactions: ChainTx[];
 }
 
 export interface MediaUpload { sha256: Hex32; url: string; size: number; mimeType: string }
 
 export type LedgerType = 'topup' | 'secure' | 'release' | 'refund';
 export interface LedgerEntry { id: string; dealId: string | null; type: LedgerType; amountMinor: Minor; at: Unix; label: string }
-export interface Wallet { balanceMinor: Minor; currency: Currency; heldMinor: Minor; ledger: LedgerEntry[] }
+export interface Wallet { balanceMinor: Minor; currency: Currency; heldMinor: Minor; ledger: LedgerEntry[]; address?: string }
 
 export interface ApiError { error: { code: ErrorCode; message: string } }
 export type ErrorCode = 'UNAUTHORIZED' | 'FORBIDDEN' | 'NOT_FOUND' | 'VALIDATION' | 'INVALID_STATE'
-  | 'DEADLINE_PASSED' | 'DEADLINE_NOT_REACHED' | 'QR_MISMATCH' | 'INSUFFICIENT_FUNDS' | 'AI_ERROR' | 'INTERNAL';
+  | 'DEADLINE_PASSED' | 'DEADLINE_NOT_REACHED' | 'QR_MISMATCH' | 'INSUFFICIENT_FUNDS' | 'AI_ERROR' | 'UPSTREAM' | 'INTERNAL';
