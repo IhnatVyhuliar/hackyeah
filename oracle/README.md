@@ -17,7 +17,7 @@ moves the deal to `ReturnRequested` on its own.
 | `chain.ts` | Anchor client; only `resolveDispute` and `settleExpired` exist here |
 | `storage.ts` | server/ `/media` (files addressed by sha256) + report upload as the oracle account |
 | `fixture.ts` | runs the model + `decide()` on local files, no chain |
-| `../prompts/v1.md` | versioned prompt; changes go to a new `v2.md` |
+| `../prompts/v2.md` | active versioned prompt (`PROMPT_VERSION` in `src/gemini.ts`); `v1.md` is kept unchanged, a change goes to a new `v3.md` |
 
 The model never picks the winner. Anyone can download the report from `${API_URL}/media/<report_hash>` (the hex of the on-chain `report_hash`),
 run sha256 on it and re-run `decide()` on its fields.

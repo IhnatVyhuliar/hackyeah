@@ -52,7 +52,7 @@ This user decided two things:
 **What changes once it is removed:**
 
 - The money is held by a program whose code anyone can read.
-- The rules (deadlines, who may do what) are the same for everyone and cannot change while a case is open.
+- The deployed program enforces the same deadlines and permissions for everyone. On devnet the program is still upgradeable; production would remove the upgrade authority.
 - Disputes are settled by an AI oracle with a **binary** power: buyer or seller. It cannot take the funds or freeze them, because after its deadline anyone can close the deal.
 - The evidence (listing hash, video hashes, QR commitment) is written on-chain with a timestamp.
 - The user pays the network fee and the rent deposit for the `Deal` account (see [limitations](#trust-model-and-known-limitations)). We pay for the oracle's Gemini tokens.
@@ -172,7 +172,9 @@ Test cases with expected verdicts live in [`oracle/fixtures/`](oracle/fixtures):
 
 ## Demo
 
-The live demo uses two phones (seller and buyer) on devnet:
+**What sends real transactions today:** the program on devnet, [`unbox-cli`](cli/) and the app's Solana client [`app/src/solana/`](app/src/solana/) (`SolanaEscrow`). **The app screens and the web build on the landing are a UI simulation:** they run the prototype's demo engine in [`app/src/AppProvider.tsx`](app/src/AppProvider.tsx), so tapping a button there does **not** send a Solana transaction, and their Explorer links point to made-up signatures. Until the screens are wired to `SolanaEscrow`, the CLI is the way to drive the real program (see [Running it](#running-it)).
+
+The planned live demo, once the screens are wired, uses two phones (seller and buyer) on devnet:
 
 - **Deal A, dispute.** A parcel with a printed QR card and a shirt with an **undisclosed stain**, staged in `Shipped` shortly before the presentation. Live: film the unboxing, file a complaint, show the AI verdict with its rule path, open `resolve_dispute` in Solana Explorer.
 - **Deal B, happy path.** List and buy live, then "Everything OK" and the payout in Explorer.
@@ -188,6 +190,8 @@ The live demo uses two phones (seller and buyer) on devnet:
 | `resolve_dispute` | TODO |
 | `settle_expired` | TODO |
 
+The table stays empty until a devnet run on the current program build is confirmed; we do not list transactions we have not verified.
+
 ## Project status
 
 | Part | State |
@@ -197,8 +201,8 @@ The live demo uses two phones (seller and buyer) on devnet:
 | Oracle | Evidence hash checks, Gemini report, `decide()`, `resolve_dispute`, optional crank; unit tests for `decide`, evidence, crank and resolve |
 | `server/` | Accounts, listings, media store addressed by sha256; in `PAYMENTS=solana` it mirrors `Deal` accounts read from RPC and holds no keys |
 | App wallet + `SolanaEscrow` (`app/src/solana/`) | Implemented and tested against Surfpool through the shared `Escrow` interface |
-| App screens | Still run the prototype's demo engine (`app/src/AppProvider.tsx`, mocked transactions); wiring them to `SolanaEscrow` is in progress |
-| Landing + web build of the app | Live at [vibecourses.co/sellsor](https://vibecourses.co/sellsor/); the web build uses the mocked engine |
+| App screens | Still run the prototype's demo engine (`app/src/AppProvider.tsx`, mocked transactions, local listings, simulated AI verdict); they do not call `app/src/solana/` yet, so UI actions send no Solana transactions. Wiring them to `SolanaEscrow` is in progress |
+| Landing + web build of the app | Live at [vibecourses.co/sellsor](https://vibecourses.co/sellsor/); the web build is a UI simulation on the same mocked engine, not a devnet client |
 
 ## Repository map
 
@@ -267,6 +271,8 @@ cp app/.env.example app/.env                  # EXPO_PUBLIC_API_URL (laptop LAN 
 pnpm --filter app start                       # scan with Expo Go
 ```
 
+The screens currently run the demo engine (see [Demo](#demo)); `EXPO_PUBLIC_RPC_URL` and `EXPO_PUBLIC_ORACLE_PUBKEY` are read by `app/src/solana/`, while `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_PAYMENTS` are not read by the current UI yet.
+
 **CLI** (no phone needed; global flags go before the subcommand):
 
 ```bash
@@ -308,6 +314,8 @@ We would rather state these openly:
 - **The wallet key exists only on the phone.** Losing the phone or deleting the app means losing the funds.
 - **Recordings are public.** A file's address is its sha256 stored on-chain, so anyone who reads a `Deal` account can download it.
 - **Filming every unboxing is extra effort for the buyer.** That is the price of having no intermediary.
+- **The program does not itself forbid `seller == arbiter`.** On-chain, `purchase(expected_listing_hash, expected_arbiter)` makes the buyer accept the exact `deal.arbiter` ([`purchase.rs`](programs/unbox_escrow/src/instructions/purchase.rs)), and `create_listing` takes the arbiter as given. The app (`app/src/solana/escrow.ts`) and `unbox-cli` additionally refuse the obvious case where the seller is the arbiter of their own sale, but that is a client check, not program enforcement, and a seller could still name a second key they control. Buyer safety therefore rests on the buyer's client trusting only the configured oracle key (`EXPO_PUBLIC_ORACLE_PUBKEY` / `--arbiter`). In production the arbiter should be an independent oracle or a quorum of them.
+- **A parcel without the QR card blocks the complaint.** `mark_shipped` stores only the seller's commitment to the card's secret; `accept_delivery` and `open_dispute` both require that secret. This version cannot prove cryptographically that the physical card was really put in the parcel, so a seller who records a commitment but ships without the card (for example an empty box) stops the buyer from opening a dispute, and after `UNBOX_TIMEOUT` `settle_expired` pays the seller. The packing video is the only evidence against this today. We treat it as a known limitation of the hackathon prototype; the fix we would make is an `open_dispute` path without the secret that the oracle judges on `seller_recording.qr_card_packed`.
 - **The program is upgradeable on devnet.** In production the upgrade authority would be removed with `solana program set-upgrade-authority --final`.
 
 ## Next steps
@@ -330,5 +338,5 @@ We would rather state these openly:
 | Where in the code does the intermediary disappear? | [`programs/unbox_escrow/src/instructions/`](programs/unbox_escrow/src/instructions): the state machine, QR commitment checks, the arbiter limited to `Disputed` and two verdicts, `settle_expired`. See [the table above](#where-the-intermediary-disappears). |
 | What if one party disappears halfway? | [The `settle_expired` table](#settle_expired-nobody-has-to-watch-over-the-deal): after every deadline the funds can be released by anyone. |
 | Who can do what? Can the authors change anything? | [Permissions](#permissions). There is no admin instruction. On devnet the program is upgradeable; in production the upgrade authority would be removed. The arbiter is visible on the account and accepted by the buyer in `purchase`. |
-| Why a blockchain and not a database? | The funds are held by code, not by a company. Commitments (listing, videos, QR) are immutable and timestamped. The rules are the same for everyone and cannot change during a case. Even we cannot block a payout. |
+| Why a blockchain and not a database? | The funds are held by code, not by a company. Commitments (listing, videos, QR) are immutable and timestamped. The current program has no admin withdrawal, freeze or manual payout path. Funds can move only through the published state machine. The devnet deployment is still upgradeable; production would make it immutable by removing the upgrade authority. |
 | Who pays for the AI? | We do, as the oracle operator. The user pays only the network fee (and the rent deposit described above). |
