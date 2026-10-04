@@ -7,12 +7,14 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
+    "web": "expo start --web --port 8090",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anchor-lang/core": "1.1.2",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
+    "@expo/metro-runtime": "~57.0.16",
     "@noble/hashes": "^2.4.0",
     "@solana/web3.js": "1.99.0",
     "@unbox/shared": "workspace:*",
@@ -28,11 +30,13 @@
     "lucide-react-native": "^1.51.0",
     "qrcode": "^1.5.4",
     "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-get-random-values": "~1.11.0",
     "react-native-qrcode-svg": "^6.3.26",
     "react-native-safe-area-context": "~5.7.0",
-    "react-native-svg": "15.15.4"
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.2"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.6",
