@@ -16,11 +16,15 @@ The first run generates a separate Expo project in `landing/.build/` (gitignored
 
 ## Deploy
 
-The site lives in the vibecourses repo, which deploys `website/` on every push to `main`:
+Automatic: every push to `main` that touches `landing/`, `app/` or the workflow runs `.github/workflows/deploy-sellsor.yml`. It only starts the `Sellsor` workflow in `MaciejLazarczyk/vibecourses`, which builds this repo's `main` with `landing/build-site.sh` (no secrets in that job), accepts only static files (no `.php`, no dotfiles), commits them to `website/public_html/sellsor/` and starts that repo's FTP deploy. A full run takes about 5 minutes.
+
+The trigger needs the `VIBECOURSES_DISPATCH_TOKEN` secret here: a fine-grained token for `MaciejLazarczyk/vibecourses` only, with **Actions: Read and write** and nothing else. Without it the workflow only prints a warning.
+
+By hand, from a machine with push access to vibecourses:
 
 ```
 rsync -a --delete landing/dist/ ~/vibeCourses/website/public_html/sellsor/
 cd ~/vibeCourses && git add website/public_html/sellsor && git commit -m "Sellsor: update" && git push
 ```
 
-That deploy mirrors the repo with `--delete`, so files uploaded to the server by hand disappear on the next push.
+The vibecourses deploy mirrors that repo with `--delete`, so files uploaded to the server by hand disappear on the next push.

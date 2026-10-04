@@ -1,0 +1,31 @@
+name: Deploy vibecourses.co/sellsor
+
+# Asks the vibecourses repo to rebuild /sellsor from main (landing/build-site.sh); the build, the
+# static-files check and the FTP upload all run there. VIBECOURSES_DISPATCH_TOKEN is a fine-grained
+# token for MaciejLazarczyk/vibecourses with Actions read/write only: it can start that rebuild, nothing else.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'landing/**'
+      - 'app/**'
+      - '.github/workflows/deploy-sellsor.yml'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start the Sellsor workflow in vibecourses
+        env:
+          GH_TOKEN: ${{ secrets.VIBECOURSES_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::VIBECOURSES_DISPATCH_TOKEN is not set, so vibecourses.co/sellsor was not rebuilt"
+            exit 0
+          fi
+          gh api -X POST repos/MaciejLazarczyk/vibecourses/actions/workflows/sellsor.yml/dispatches -f ref=main -f 'inputs[ref]=main'
+          echo "Started: https://github.com/MaciejLazarczyk/vibecourses/actions/workflows/sellsor.yml"

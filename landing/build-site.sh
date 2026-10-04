@@ -12,14 +12,17 @@ BASE_URL="${BASE_URL:-/sellsor}"
 WORK="$HERE/.build"
 APP="$WORK/sellsor-app"
 OUT="$HERE/dist"
+# Same Expo SDK as app/ (e.g. "~57.0.26" -> 57); a different SDK recreates the project.
+SDK="$(node -p 'require(process.argv[1]).dependencies.expo.match(/\d+/)[0]' "$APP_SRC/package.json")"
 
-if [ ! -d "$APP/node_modules" ]; then
-  echo "==> Creating Expo project in $APP"
+if [ ! -d "$APP/node_modules" ] || [ "$(cat "$WORK/sdk" 2>/dev/null)" != "$SDK" ]; then
+  echo "==> Creating Expo SDK $SDK project in $APP"
   rm -rf "$WORK" && mkdir -p "$WORK"
-  (cd "$WORK" && npx --yes create-expo-app@latest sellsor-app --template blank-typescript --yes)
+  (cd "$WORK" && npx --yes create-expo-app@latest sellsor-app --template "blank-typescript@sdk-$SDK" --yes)
   (cd "$APP" && npx expo install expo-font expo-status-bar react-native-svg react-native-safe-area-context \
     @expo-google-fonts/space-grotesk @expo-google-fonts/jetbrains-mono lucide-react-native \
     buffer react-native-get-random-values react-dom react-native-web @expo/metro-runtime)
+  echo "$SDK" > "$WORK/sdk"
 fi
 
 echo "==> Copying app sources"
