@@ -13,7 +13,8 @@ export function OnbWelcome({ p }: any) {
   return (
     <View style={{ flex: 1, padding: 20, paddingBottom: 24, gap: 24 }}>
       <Wordmark s={26} />
-      <View style={{ flex: 1, justifyContent: 'flex-end', gap: 20 }}>
+      {/* Scrolls on short screens instead of overflowing upwards onto the wordmark. */}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', gap: 20 }} showsVerticalScrollIndicator={false}>
         <Txt s={36} w={600} ls={-1.1} lh={1.06}>Używane ubrania od nieznajomych. Bez opłaty za ochronę.</Txt>
         <View style={{ flexDirection: 'row', width: 56, height: 3 }}>
           <View style={{ flex: 1, backgroundColor: col('var(--purple-500)') }} /><View style={{ flex: 1, backgroundColor: col('var(--mint-500)') }} />
@@ -26,7 +27,7 @@ export function OnbWelcome({ p }: any) {
             </View>
           ))}
         </View>
-      </View>
+      </ScrollView>
       <View style={{ gap: 12 }}>
         <Btn label="Utwórz portfel" onPress={p.onbStart} />
         <Label style={{ textAlign: 'center' }}>Sieć testowa · devnet</Label>
