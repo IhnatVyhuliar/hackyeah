@@ -162,10 +162,10 @@ Returning ──confirm_return(return_qr_secret)──▶ Refunded              
 | `purchase(expected_listing_hash, expected_arbiter)` | kupujący ≠ sprzedający | `Listed` | argumenty zgodne z kontem, czyli kupujący **jawnie akceptuje arbitra** |
 | `mark_shipped` | sprzedający | `Paid` | `now < changed_at + SHIP_TIMEOUT` |
 | `accept_delivery` | kupujący | `Shipped` | `now < changed_at + UNBOX_TIMEOUT`, commitment QR się zgadza |
-| `open_dispute` | kupujący | `Shipped` | jw. |
-| `resolve_dispute` | `deal.arbiter` | `Disputed` | `now < changed_at + ORACLE_TIMEOUT`, werdykt ≠ `None` |
-| `mark_returned` | kupujący | `ReturnRequested` | `now < changed_at + RETURN_SHIP_TIMEOUT` |
-| `confirm_return` | sprzedający | `Returning` | commitment QR zwrotu się zgadza |
+| `open_dispute` | kupujący | `Shipped` | jw.; hash nagrania i hash reklamacji ≠ 0 |
+| `resolve_dispute` | `deal.arbiter` | `Disputed` | `now < changed_at + ORACLE_TIMEOUT`, werdykt ≠ `None`, `report_hash` ≠ 0 |
+| `mark_returned` | kupujący | `ReturnRequested` | `now < changed_at + RETURN_SHIP_TIMEOUT`, commitment i hash nagrania ≠ 0, numer przesyłki 1–32 znaków |
+| `confirm_return` | sprzedający | `Returning` | `now < changed_at + RETURN_CONFIRM_TIMEOUT`, commitment QR zwrotu się zgadza |
 | `settle_expired` | **ktokolwiek** | patrz tabela niżej | `now >= changed_at + TIMEOUT` |
 
 ### `settle_expired` — tu widać, że nikt nie musi „pilnować” umowy
@@ -347,7 +347,7 @@ Etykiety trzymamy w `packages/shared`.
 ├── programs/unbox_escrow/     # TU ZNIKA POŚREDNIK
 │   └── src/{lib.rs, state.rs, constants.rs, errors.rs, events.rs, logic.rs, instructions/*.rs}
 ├── tests/                     # testy Anchora (TS, localnet) — każda ścieżka z §4
-├── packages/shared/           # IDL + typy, PROGRAM_ID, ORACLE_PUBKEY, commitmenty QR, etykiety PL
+├── packages/shared/           # IDL + typy, commitmenty QR, etykiety PL (id programu bierzemy z `address` w IDL w `packages/shared/idl/`; zaufany arbiter z `EXPO_PUBLIC_ORACLE_PUBKEY` w aplikacji i `ARBITER_PUBKEY` w `server/`)
 ├── app/                       # React Native (Expo)
 ├── oracle/                    # wyrocznia Gemini + crank settle_expired
 │   ├── prompts/v1.md
@@ -367,7 +367,7 @@ Etykiety trzymamy w `packages/shared`.
 | `pnpm --filter app start` | Expo |
 | `pnpm --filter oracle dev` | wyrocznia |
 | `pnpm dev:server` | backend `server/` (w dev containerze) |
-| `cd cli && cargo run -- --help` | `unbox-cli`: `link`, `publish`, `buy`, `ship`, `accept`, `settle`, `show` (w dev containerze) |
+| `cd cli && cargo run -- --help` | `unbox-cli`: `link`, `publish`, `buy`, `ship`, `accept`, `dispute`, `return`, `confirm-return`, `settle`, `show` (w dev containerze) |
 
 **Stack** (on-chain i klient TS zgodne z dev containerem Superteam, na którym opierają się materiały sponsora):
 
@@ -486,7 +486,7 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 - możliwość zakwestionowania zwrotu przez sprzedającego;
 - wyrocznia statusu przewoźnika (InPost);
 - odzyskiwanie portfela (passkeys albo MPC) zamiast jednego klucza na telefonie;
-- prywatny bucket z podpisanymi linkami zamiast publicznych nagrań.
+- prywatne media z podpisanymi linkami (albo szyfrowanie nagrań) zamiast publicznych nagrań.
 
 **Znane ograniczenia** (mówimy o nich wprost, bo jury ceni świadomość ograniczeń):
 
@@ -499,7 +499,7 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 - cena w SOL jest zmienna;
 - numer przesyłki nie jest weryfikowany;
 - klucz portfela jest tylko na telefonie: utrata telefonu albo usunięcie aplikacji oznacza utratę środków;
-- nagrania leżą w publicznym buckecie, a ich ścieżki da się wyprowadzić z adresu transakcji (on-chain są tylko hashe);
+- nagrania leżą w `server/` `/media` i są publicznie dostępne: adresem pliku jest sha256 zapisany on-chain, więc każdy, kto odczyta konto `Deal`, może je pobrać;
 - nagrywanie otwarcia każdej paczki to dodatkowy wysiłek kupującego; to cena za brak pośrednika i mówimy o niej w pitchu.
 
 ---
@@ -526,3 +526,4 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 - **2026-10-04** — Pliki dowodowe w `server/` `/media` (adres = sha256, w tym `complaint.json` i `report.json`) zamiast Supabase Storage.
 - **2026-10-04** — Szew `Escrow` (`packages/shared/src/escrow.ts`) z dwiema implementacjami: `DemoEscrow` (osoba A) i `SolanaEscrow` (osoba B).
 - **2026-10-04** — Prototyp `Front-end/sellsor-rn` przeniesiony do `app/`; jedno konto na telefon.
+- **2026-10-04** — Wyrocznia: `CRANK=off` na demo, żeby kupujący mógł sam kliknąć „Odbierz środki” na transakcji `Paid` po terminie (domyślnie `on`). Dowody pobiera przez `API_URL`, niezależnie od adresu zamrożonego on-chain w `metadata_uri` (integralność daje hash).
