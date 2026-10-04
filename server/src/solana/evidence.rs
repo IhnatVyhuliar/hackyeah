@@ -6,17 +6,34 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 use unbox_escrow::state::{Deal as ChainDeal, Verdict as ChainVerdict};
 
+/// Complaint and report JSON are tiny; a bigger file (e.g. a video hash committed by mistake) is never read.
+const MAX_EVIDENCE_BYTES: u64 = 1 << 20;
+
 fn committed(dir: &Path, hash: &[u8; 32]) -> Option<Vec<u8>> {
     if *hash == [0u8; 32] {
         return None;
     }
-    let bytes = std::fs::read(dir.join(hex::encode(hash))).ok()?;
+    let path = dir.join(hex::encode(hash));
+    if std::fs::metadata(&path).ok()?.len() > MAX_EVIDENCE_BYTES {
+        return None;
+    }
+    let bytes = std::fs::read(path).ok()?;
     (Sha256::digest(&bytes).as_slice() == hash.as_slice()).then_some(bytes)
 }
 
 pub fn enrich(media_dir: &Path, deal: &mut Deal, chain: &ChainDeal, now: Unix) {
     if deal.complaint.is_none() {
-        deal.complaint = committed(media_dir, &chain.complaint_hash).and_then(|b| serde_json::from_slice(&b).ok());
+        deal.complaint = committed(media_dir, &chain.complaint_hash).and_then(|b| {
+            serde_json::from_slice(&b)
+                .map_err(|_| {
+                    tracing::warn!(
+                        "deal {}: complaint {} matches its hash but is not valid",
+                        deal.id,
+                        hex::encode(chain.complaint_hash)
+                    )
+                })
+                .ok()
+        });
     }
     let verdict = match chain.verdict {
         ChainVerdict::None => return,
@@ -26,8 +43,17 @@ pub fn enrich(media_dir: &Path, deal: &mut Deal, chain: &ChainDeal, now: Unix) {
     if deal.analysis.as_ref().is_some_and(|a| a.report.is_some()) {
         return;
     }
-    let doc: Option<serde_json::Value> =
-        committed(media_dir, &chain.report_hash).and_then(|b| serde_json::from_slice(&b).ok());
+    let doc: Option<serde_json::Value> = committed(media_dir, &chain.report_hash).and_then(|b| {
+        serde_json::from_slice(&b)
+            .map_err(|_| {
+                tracing::warn!(
+                    "deal {}: report {} matches its hash but is not valid JSON",
+                    deal.id,
+                    hex::encode(chain.report_hash)
+                )
+            })
+            .ok()
+    });
     let text = |k: &str| doc.as_ref().and_then(|v| v[k].as_str()).map(String::from);
     deal.analysis = Some(Analysis {
         status: AnalysisStatus::Done,

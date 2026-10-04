@@ -60,6 +60,8 @@ i nie zmienia stanu pieniędzy: odbija w SQLite stan kont `Deal` odczytany przez
 Stare `POST /api/listings/{id}/purchase` i `POST /api/deals/{id}/{ship|accept|dispute|return|confirm-return|settle}`
 zwracają w tym trybie 409. Spory rozstrzyga wyrocznia (`oracle/`) instrukcją `resolve_dispute`.
 
+Pola `complaint` i `analysis` odbitej transakcji pochodzą z plików w `/media`, których sha256 jest równy `complaint_hash` / `report_hash` z konta `Deal` (plik o innym hashu albo większy niż 1 MiB jest ignorowany). `report.json` wgrywa wyrocznia własnym kontem (`ORACLE_API_EMAIL`).
+
 `PAYMENTS=demo`: dawny ledger w SQLite. Używają go `cargo test`, `pnpm test:contract` i awaryjne demo offline.
 
 | Zmienna | Domyślnie | Znaczenie |
@@ -140,7 +142,7 @@ Terminy (`deadlineAt = statusChangedAt + TIMEOUTS[status]`, demo / prod): `Paid`
 
 Błędy zawsze: `{ "error": { "code", "message" } }` (komunikat po polsku). `400 VALIDATION`, `401 UNAUTHORIZED`, `403 FORBIDDEN` (cudza transakcja albo zła rola), `404 NOT_FOUND`, `409 INVALID_STATE | DEADLINE_PASSED | DEADLINE_NOT_REACHED | QR_MISMATCH | INSUFFICIENT_FUNDS`, `413` (za duży plik, kod `VALIDATION`), `500 INTERNAL`.
 
-**Media:** serwer liczy sha256 sam, ignoruje nazwę pliku od klienta, plik nazywa się swoim haszem i nie jest nadpisywany. Dozwolone: `image/jpeg|png|webp|heic`, `video/mp4|quicktime`. Nagranie podane w `ship`/`dispute`/`return` musi być wcześniej wgrane przez tę samą osobę (`POST /api/media`), inaczej `400`.
+**Media:** serwer liczy sha256 sam, ignoruje nazwę pliku od klienta, plik nazywa się swoim haszem i nie jest nadpisywany. Dozwolone: `image/jpeg|png|webp|heic`, `video/mp4|quicktime`, `application/json` (`complaint.json`, `report.json`). Nagranie podane w `ship`/`dispute`/`return` musi być wcześniej wgrane przez tę samą osobę (`POST /api/media`), inaczej `400`.
 
 ### Przykład: od zakupu do wypłaty
 

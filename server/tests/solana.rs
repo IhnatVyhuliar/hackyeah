@@ -392,3 +392,42 @@ async fn verdict_without_a_readable_report_still_shows_the_verdict() {
     assert_eq!((d["analysis"]["verdict"].clone(), d["analysis"]["report"].clone()), (json!("SELLER"), Value::Null));
     assert_eq!(d["analysis"]["reportHash"], hex::encode([9u8; 32]));
 }
+
+fn put_media(m: &Market, bytes: &[u8], name_hash: &[u8; 32]) {
+    let dir = m.b.dir.path().join("media");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(hex::encode(name_hash)), bytes).unwrap();
+}
+
+#[tokio::test]
+async fn complaint_file_not_matching_its_hash_is_ignored() {
+    let m = market("600000").await;
+    let mut disputed = m.chain(ChainStatus::Disputed, now());
+    disputed.complaint_hash = [5; 32];
+    // Valid complaint JSON, but its sha256 is not the committed [5; 32].
+    put_media(
+        &m,
+        br#"{"v":1,"category":"damaged","description":"podrobione","created_at":1}"#,
+        &disputed.complaint_hash,
+    );
+    m.rpc.put_deal(&m.deal, &disputed);
+    m.notify().await;
+    let (_, d) = m.bartek.call(Method::GET, "/api/deals/l-kurtka-levis", None).await;
+    assert!(d["complaint"].is_null(), "{d}");
+}
+
+#[tokio::test]
+async fn oversized_committed_file_is_not_read() {
+    use sha2::{Digest, Sha256};
+    let m = market("600000").await;
+    // A hash-valid complaint over the 1 MiB cap (e.g. a video hash committed as complaint_hash).
+    let big = format!(r#"{{"v":1,"category":"damaged","description":"{}","created_at":1}}"#, "x".repeat(2 << 20));
+    let h: [u8; 32] = Sha256::digest(big.as_bytes()).into();
+    put_media(&m, big.as_bytes(), &h);
+    let mut disputed = m.chain(ChainStatus::Disputed, now());
+    disputed.complaint_hash = h;
+    m.rpc.put_deal(&m.deal, &disputed);
+    m.notify().await;
+    let (_, d) = m.bartek.call(Method::GET, "/api/deals/l-kurtka-levis", None).await;
+    assert!(d["complaint"].is_null(), "{d}");
+}
