@@ -4,17 +4,30 @@ Eksport prototypu `Sellsor App v4`: tryb ciemny, jeden telefon, 100 ogłoszeń z
 
 ## Uruchomienie
 
+Aplikacja jest pakietem `app` w workspace pnpm (z roota repo, na hoście, nie w dev containerze):
+
 ```bash
-bash setup.sh          # tworzy sellsor-app/ na aktualnym Expo SDK i instaluje zależności
-cd sellsor-app
-npx expo start         # Expo Go na telefonie albo emulator
+pnpm install                     # w roocie repo
+cp app/.env.example app/.env     # uzupełnij EXPO_PUBLIC_API_URL (IP laptopa w LAN, nie localhost)
+pnpm --filter app start          # Expo Go na telefonie albo emulator
 ```
 
-Ręcznie: `npx create-expo-app@latest --template blank-typescript`, skopiuj `App.tsx`, `app.json`, `src/`, potem `npx expo install expo-font expo-status-bar react-native-svg react-native-safe-area-context @expo-google-fonts/space-grotesk @expo-google-fonts/jetbrains-mono lucide-react-native`.
+`pnpm --filter app typecheck` sprawdza typy. Polyfille (`react-native-get-random-values`, globalny `Buffer`) ładuje `polyfills.ts` jako pierwszy import w `index.ts`, przed `App`.
+
+| Zmienna | Znaczenie |
+|---|---|
+| `EXPO_PUBLIC_API_URL` | adres `server/`, np. `http://192.168.1.10:4000` |
+| `EXPO_PUBLIC_PAYMENTS` | `demo` (REST, `DemoEscrow`) albo `solana` (`app/src/solana/`) |
+| `EXPO_PUBLIC_RPC_URL` | RPC devnetu |
+| `EXPO_PUBLIC_ORACLE_PUBKEY` | klucz wyroczni (arbiter), któremu ufa aplikacja |
+
+`app/src/solana/index.ts` to na razie stub (`createSolanaEscrow()` odrzuca każdą operację); prawdziwą implementację dostarcza osoba B.
 
 ## Struktura
 
 ```
+index.ts                wejście: polyfille, potem registerRootComponent(App)
+polyfills.ts            getRandomValues i Buffer dla @solana/web3.js
 App.tsx                 fonty, SafeArea, provider
 src/config.ts           opcje startowe demo (konto, onboarding, saldo, tryb QR)
 src/AppProvider.tsx     silnik demo: maszyna stanów, terminy, mock transakcji, kurs zł, view modele
