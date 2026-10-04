@@ -10,8 +10,19 @@ export const mediaUrl = (sha: string) => `${api()}/media/${sha.toLowerCase()}`;
 
 // null only when the file definitely is not there (404, or 400 for a non-hash like the all-zero hash).
 // Network/server errors throw, so a flaky connection is never mistaken for missing evidence.
+// Integrity comes from the on-chain hashes, so the origin frozen at publish time (LAN IP, tunnel)
+// does not matter: keep path + query of an http(s) ref and fetch it from API_URL.
+export const rebase = (ref: string, apiUrl: string): string => {
+  const base = apiUrl.replace(/\/$/, "");
+  if (/^https?:\/\//i.test(ref)) {
+    const u = new URL(ref);
+    return base + u.pathname + u.search;
+  }
+  return `${base}/media/${ref.toLowerCase()}`;
+};
+
 export const fetchBytes: FetchBytes = async (ref) => {
-  const res = await fetch(ref.startsWith("http") ? ref : mediaUrl(ref));
+  const res = await fetch(rebase(ref, api()));
   if (res.status === 404 || res.status === 400) return null;
   if (!res.ok) throw new Error(`GET ${ref}: HTTP ${res.status}`);
   return new Uint8Array(await res.arrayBuffer());

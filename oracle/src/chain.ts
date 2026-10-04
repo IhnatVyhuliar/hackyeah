@@ -114,7 +114,6 @@ export async function connect(): Promise<Chain> {
           deal: deal.publicKey,
           arbiter: keypair.publicKey,
           seller: deal.account.seller,
-          buyer: deal.account.buyer,
         })
         .rpc();
     },

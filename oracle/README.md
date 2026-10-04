@@ -9,7 +9,7 @@ moves the deal to `ReturnRequested` on its own.
 
 | File | What it does |
 |---|---|
-| `watch.ts` | polls `Deal` accounts every ~5 s; disputes assigned to our key → `resolve.ts`; expired deals → `settle_expired` (convenience, anyone can do it) |
+| `watch.ts` | polls `Deal` accounts every ~5 s; disputes assigned to our key → `resolve.ts`; expired deals → `settle_expired` (convenience, anyone can do it; off with `CRANK=off`) |
 | `evidence.ts` | downloads metadata, photos, both videos and the complaint; sha256 of the exact bytes vs on-chain hashes |
 | `decide.ts` | `decideFromEvidence()`: missing or mismatched file → its author loses, no AI. `decide()`: the verdict from the report, exactly as in `CLAUDE.md` §5 |
 | `gemini.ts` | Gemini Interactions API, videos via Files API, structured output; the model only fills report fields |
@@ -19,8 +19,17 @@ moves the deal to `ReturnRequested` on its own.
 | `fixture.ts` | runs the model + `decide()` on local files, no chain |
 | `../prompts/v1.md` | versioned prompt; changes go to a new `v2.md` |
 
-The model never picks the winner. Anyone can download `deals/<deal>/report.json`, hash it and compare it with
-`report_hash` on-chain, then re-run `decide()` on its fields.
+The model never picks the winner. Anyone can download the report from `${API_URL}/media/<report_hash>` (the hex of the on-chain `report_hash`),
+run sha256 on it and re-run `decide()` on its fields.
+
+Notes:
+
+- `CRANK=on|off` (default `on`). With `off` the oracle never calls `settle_expired`, only resolves disputes. The
+  demo uses it so the buyer can press „Odbierz środki” on a staged `Paid` deal. The startup log shows the mode.
+- Evidence is always fetched via `API_URL`, whatever origin was frozen on-chain in `metadata_uri` / photo URLs;
+  integrity comes from the hashes.
+- Each retry after a failed `resolve_dispute` re-runs the model and uploads a new `report.json`; only the one
+  whose hash ends up on-chain counts. Run exactly one oracle.
 
 ## Run
 
