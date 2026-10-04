@@ -355,6 +355,7 @@ Etykiety trzymamy w `packages/shared`.
 ├── server/                    # Rust (axum + SQLite): konta, ogłoszenia, media; PAYMENTS=solana odbija program
 ├── cli/                       # unbox-cli: demo bez telefonu, podpisuje z pliku keypaira (osobny crate)
 ├── scripts/                   # zasilenie portfeli demo, seed ogłoszeń, staging demo
+├── landing/                   # landing (laptopy) + webowy build app/ (telefony) → vibecourses.co/sellsor
 └── docs/                      # uzasadnienie, skrypt demo, materiały do pitchu
 ```
 
@@ -527,3 +528,4 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 - **2026-10-04** — Szew `Escrow` (`packages/shared/src/escrow.ts`) z dwiema implementacjami: `DemoEscrow` (osoba A) i `SolanaEscrow` (osoba B).
 - **2026-10-04** — Prototyp `Front-end/sellsor-rn` przeniesiony do `app/`; jedno konto na telefon.
 - **2026-10-04** — Wyrocznia: `CRANK=off` na demo, żeby kupujący mógł sam kliknąć „Odbierz środki” na transakcji `Paid` po terminie (domyślnie `on`). Dowody pobiera przez `API_URL`, niezależnie od adresu zamrożonego on-chain w `metadata_uri` (integralność daje hash).
+- **2026-10-04** — Landing (eksport Claude Design, układ pod laptopy) w `landing/`, hostowany na vibecourses.co/sellsor. Telefony są przekierowywane na webowy build `app/` (`/sellsor/app/`, silnik demo z mockami). Build: `landing/build-site.sh`; deploy przez push do repo vibecourses (`website/public_html/sellsor/`).

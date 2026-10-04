@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="pl"><head><script>// The landing is laid out for laptops; phones and small tablets get the app prototype. ?landing keeps the landing.
+if (!/[?&]landing\b/.test(location.search) && matchMedia('(pointer: coarse) and (max-width: 1000px)').matches) location.replace('app/');
+</script>
+<script>window.__resources = {"ic_image": "assets/b1a0a08e.svg", "ic_arrow_down": "assets/36d87733.svg", "ic_copy": "assets/43e051ea.svg", "ic_shield_check": "assets/9dd8ab6e.svg", "ic_list_checks": "assets/05c67210.svg", "ic_scan_eye": "assets/f1d4a9ed.svg", "ic_shopping_bag": "assets/c0d69871.svg", "ic_package": "assets/5bfd32d2.svg", "ic_signal": "assets/7832a545.svg", "ic_wifi": "assets/3dd88288.svg", "ic_battery_full": "assets/616c0ad2.svg", "ic_play": "assets/4321204a.svg", "ic_circle_check": "assets/38b3ed39.svg", "ic_check": "assets/31a38361.svg", "ic_chevron_left": "assets/31c3cc79.svg", "ic_x": "assets/1722aac9.svg", "ic_qr_code": "assets/1bbf44ef.svg", "img_hero_png": "assets/437b56d2.jpg", "img_p_fees_png": "assets/d90ec88d.jpg", "img_p_wait_png": "assets/72f62260.jpg", "img_sol_pack_png": "assets/3c2c61da.jpg", "img_sol_pair_png": "assets/97bb8de9.jpg", "img_scr_a_jacket_png": "assets/ff1dc69d.jpg", "img_scr_c_video_png": "assets/171182aa.jpg", "img_scr_b_camera_png": "assets/a9118c78.jpg", "img_p_fraud_png": "assets/291ae042.jpg", "https://unpkg.com/react@18.3.1/umd/react.production.min.js": "assets/d949f1c3.js", "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js": "assets/35f4f974.js"};</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="assets/8fe7df74.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sellsor — ochrona kupującego bez pośrednika</title>
+<style>@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url("assets/db5ff4db.woff2") format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url("assets/83c005d4.woff2") format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;src:url("assets/db5ff4db.woff2") format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;src:url("assets/83c005d4.woff2") format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:600;font-display:swap;src:url("assets/db5ff4db.woff2") format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:600;font-display:swap;src:url("assets/83c005d4.woff2") format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:400;font-display:swap;src:url("assets/952dddb4.woff2") format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:400;font-display:swap;src:url("assets/06408904.woff2") format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:500;font-display:swap;src:url("assets/952dddb4.woff2") format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:500;font-display:swap;src:url("assets/06408904.woff2") format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:600;font-display:swap;src:url("assets/952dddb4.woff2") format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:600;font-display:swap;src:url("assets/06408904.woff2") format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:700;font-display:swap;src:url("assets/952dddb4.woff2") format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:'Space Grotesk';font-style:normal;font-weight:700;font-display:swap;src:url("assets/06408904.woff2") format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+
+:root{
+--ink-950:#050507;--ink-900:#0B0B0F;--ink-850:#111116;--ink-800:#14141A;--ink-750:#1B1B22;--ink-700:#1E1E26;--ink-600:#2A2A35;--ink-500:#4A4A57;--ink-400:#6B6B78;--ink-300:#9A9AA6;--ink-200:#C9C9D2;--ink-100:#F4F4F6;
+--purple-500:#9945FF;--purple-400:#B98AFF;--purple-600:#7A2FE0;--purple-tint:rgba(153,69,255,.14);
+--mint-500:#14F195;--mint-400:#5CF7B8;--mint-600:#0FC97C;--mint-tint:rgba(20,241,149,.12);
+--amber-500:#FFB547;--amber-tint:rgba(255,181,71,.12);
+--red-500:#FF6B6B;--red-tint:rgba(255,107,107,.12);
+--grad-solana:linear-gradient(90deg,#9945FF 0%,#14F195 100%);/* @kind color */
+--bg-app:var(--ink-950);--bg-screen:var(--ink-900);--surface-1:var(--ink-800);--surface-2:var(--ink-750);--surface-press:var(--ink-700);
+--line:var(--ink-700);--line-strong:var(--ink-600);
+--fg-1:var(--ink-100);--fg-2:var(--ink-200);--fg-3:var(--ink-400);--fg-disabled:var(--ink-500);
+--accent:var(--purple-500);--accent-hover:#A85CFF;--accent-press:var(--purple-600);--accent-fg:#FFFFFF;--accent-soft:var(--purple-400);
+--secured:var(--mint-500);--success:var(--mint-500);--warning:var(--amber-500);--danger:var(--red-500);--info:var(--purple-400);
+--photo-placeholder:repeating-linear-gradient(135deg,#17171D 0 12px,#1B1B22 12px 24px);/* @kind color */
+--scrim:rgba(5,5,7,.72);
+}
+
+:root{
+--font-sans:'Space Grotesk',ui-sans-serif,system-ui,sans-serif;
+--font-mono:'JetBrains Mono',ui-monospace,monospace;
+--fs-display:40px;--fs-h1:32px;--fs-h2:26px;--fs-h3:20px;--fs-body-lg:17px;--fs-body:15px;--fs-small:13px;--fs-label:11px;--fs-price-xl:44px;--fs-price-lg:22px;--fs-price:15px;
+--lh-tight:1.02;/* @kind font */
+--lh-heading:1.08;/* @kind font */
+--lh-body:1.45;/* @kind font */
+--tracking-display:-0.03em;--tracking-heading:-0.02em;--tracking-label:0.06em;
+--fw-regular:400;/* @kind font */
+--fw-medium:500;/* @kind font */
+--fw-semibold:600;/* @kind font */
+--fw-bold:700;/* @kind font */
+}
+
+:root{
+--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;
+--screen-pad:20px;--tap-min:44px;--btn-h:54px;--btn-h-sm:40px;--input-h:48px;--tabbar-h:72px;
+--radius-0:0;--radius-sm:4px;--radius-md:8px;--radius-lg:16px;--radius-pill:999px;--radius-device:44px;
+--radius-photo:var(--radius-sm);--radius-card:var(--radius-sm);--radius-input:var(--radius-sm);--radius-button:var(--radius-pill);
+--border-hair:1px solid var(--line);
+--shadow-sheet:0 -12px 40px rgba(0,0,0,.5);--focus-ring:0 0 0 2px var(--bg-screen),0 0 0 4px var(--purple-400);
+--ease-out:cubic-bezier(.2,.8,.2,1);/* @kind other */
+--dur-fast:120ms;/* @kind other */
+--dur-base:200ms;/* @kind other */
+--dur-slow:320ms;/* @kind other */
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-app);color:var(--fg-1);font-family:var(--font-sans);font-size:var(--fs-body);line-height:var(--lh-body);-webkit-font-smoothing:antialiased}
+a{color:var(--mint-500);text-decoration:none}a:hover{color:var(--mint-400);text-decoration:underline}
+::selection{background:var(--purple-500);color:#fff}
+
+</style>
+<script src="assets/fff26d08.js"></script>
+<style>html{scroll-behavior:smooth}body{margin:0;background:#050507;color:#F4F4F6}a{color:#14F195;text-decoration:none}a:hover{color:#5CF7B8;text-decoration:underline}::selection{background:#9945FF;color:#fff}</style>
+</helmet>
+<div style="background:#050507;color:#F4F4F6;font-family:var(--font-sans);min-height:100vh">
+
+<header style="position:sticky;top:0;z-index:40;background:#050507;border-bottom:1px solid #1E1E26">
+  <div style="max-width:1320px;margin:0 auto;padding:0 clamp(20px,4vw,56px);height:64px;display:flex;align-items:center;gap:20px">
+    <a href="#top" style="font-weight:700;font-size:22px;letter-spacing:-.03em;color:#F4F4F6;text-decoration:none;flex-shrink:0" style-hover="color:#F4F4F6;text-decoration:none">Sellsor<span style="color:#14F195">.</span></a>
+    <nav style="flex:1;min-width:0;display:flex;justify-content:flex-end;gap:4px;overflow-x:auto;scrollbar-width:none">
+      <a href="#problem" style="height:36px;padding:0 12px;border-radius:999px;display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:15px;color:#C9C9D2;text-decoration:none" style-hover="background:#14141A;color:#F4F4F6;text-decoration:none"><span style="font-family:var(--font-mono);font-size:12px;color:#6B6B78">01</span>Problem</a>
+      <a href="#rozwiazanie" style="height:36px;padding:0 12px;border-radius:999px;display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:15px;color:#C9C9D2;text-decoration:none" style-hover="background:#14141A;color:#F4F4F6;text-decoration:none"><span style="font-family:var(--font-mono);font-size:12px;color:#6B6B78">02</span>Rozwiązanie</a>
+      <a href="#jak-dziala" style="height:36px;padding:0 12px;border-radius:999px;display:flex;align-items:center;gap:8px;white-space:nowrap;font-size:15px;color:#C9C9D2;text-decoration:none" style-hover="background:#14141A;color:#F4F4F6;text-decoration:none"><span style="font-family:var(--font-mono);font-size:12px;color:#6B6B78">03</span>Jak to działa</a>
+    </nav>
+  </div>
+  <sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}">
+    <div style="border-top:1px solid #1E1E26;background:#0B0B0F"><div style="max-width:1320px;margin:0 auto;padding:10px clamp(20px,4vw,56px);display:flex;gap:10px;align-items:center;font-size:13px;color:#C9C9D2;line-height:1.4"><span style="width:16px;height:16px;flex-shrink:0;display:block;color:#FFB547;background:currentColor;mask:url(&quot;assets/b1a0a08e.svg&quot;) center/contain no-repeat"></span>Wersja robocza: w miejscu zdjęć są prompty do GPT Image. Skopiuj prompt, wygeneruj obraz i przeciągnij go w ramkę. Prompty wyłączysz w Tweaks.</div></div>
+  </sc-if>
+</header>
+
+<section id="top" data-screen-label="Hero" style="max-width:1320px;margin:0 auto;padding:clamp(48px,6vw,96px) clamp(20px,4vw,56px) clamp(64px,8vw,120px);display:flex;flex-wrap:wrap;gap:clamp(40px,5vw,80px);align-items:center">
+  <div style="flex:1 1 460px;min-width:0;display:flex;flex-direction:column;gap:clamp(24px,3vw,36px)">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">HackYeah 2026 · Finanse bez pośrednika</span><span style="width:56px;height:2px;background:linear-gradient(90deg,#9945FF,#14F195)"></span></div>
+    <h1 style="margin:0;font-size:clamp(48px,6.6vw,104px);font-weight:600;letter-spacing:-.045em;line-height:.96;text-wrap:balance">Tanio.<br>Przejrzyście.<br>Bezpiecznie.</h1>
+    <p style="margin:0;max-width:34em;font-size:clamp(18px,1.5vw,21px);line-height:1.5;color:#C9C9D2;text-wrap:pretty">Sellsor to marketplace używanych ubrań. Pieniądze kupującego czekają w umowie, a nie na koncie platformy. Reklamację ocenia AI na podstawie nagrania pakowania i otwarcia paczki, według reguł, które każdy może sprawdzić.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:12px"><a href="#jak-dziala" style="height:54px;padding:0 26px;border-radius:999px;background:#9945FF;color:#fff;font-size:17px;font-weight:600;display:inline-flex;align-items:center;gap:10px;text-decoration:none" style-hover="background:#A85CFF;color:#fff;text-decoration:none">Zobacz, jak to działa<span style="width:18px;height:18px;display:block;background:currentColor;mask:url(&quot;assets/36d87733.svg&quot;) center/contain no-repeat"></span></a></div>
+    <dl style="margin:0;max-width:480px;display:flex;flex-direction:column;border-top:1px solid #1E1E26">
+      
+      
+      
+    </dl>
+  </div>
+<div style="flex:1 1 420px;min-width:0;position:relative;aspect-ratio:4/5;max-height:820px;border-radius:4px;overflow:hidden;background:#111116">
+    <image-slot id="lp-hero" data-res="img_hero_png" shape="rect" placeholder="Upuść zdjęcie" style="position:absolute;inset:0;width:100%;height:100%;color:#9A9AA6"></image-slot>
+    <sc-if value="{{ show.hero }}" hint-placeholder-val="{{ true }}">
+      <div data-prompt="" data-format="pionowy 2:3, 1024×1536" style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(135deg,#111116 0 12px,#15151B 12px 24px);padding:18px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Zdjęcie · paczka z kartą QR</span><sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}"><button sc-camel-on-click="{{ copy }}" style="pointer-events:auto;flex-shrink:0;height:32px;padding:0 12px;border-radius:999px;border:1px solid #2A2A35;background:#050507;color:#F4F4F6;font-family:var(--font-sans);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer" style-hover="border-color:#9945FF"><span style="width:14px;height:14px;display:block;background:currentColor;mask:url(&quot;assets/43e051ea.svg&quot;) center/contain no-repeat"></span>Kopiuj prompt</button></sc-if></div>
+        <sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}">
+          <div data-prompt-text="" style="flex:1;min-height:0;overflow:hidden;font-family:var(--font-mono);font-size:12px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Otwarta tekturowa paczka ustawiona pod lekkim kątem. W środku starannie złożona kurtka jeansowa w stylu vintage, a na niej mała biała karta z wydrukowanym czarnym kodem QR. Obok paczki leży rolka taśmy pakowej, a z boku stoi smartfon na małym statywie, skierowany obiektywem na paczkę.</div>
+          <div style="font-size:12px;line-height:1.4;color:#9A9AA6">Kopiuje się razem ze stylem wspólnym i formatem. Gotowy obraz przeciągnij w tę ramkę.</div>
+        </sc-if>
+      </div>
+    </sc-if>
+  </div>
+</section>
+
+<section id="problem" data-screen-label="01 Problem" style="scroll-margin-top:110px;background:#0B0B0F;border-top:1px solid #1E1E26;border-bottom:1px solid #1E1E26">
+  <div style="max-width:1320px;margin:0 auto;padding:clamp(72px,9vw,136px) clamp(20px,4vw,56px)">
+    <div style="display:flex;align-items:center;gap:14px"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;color:#F4F4F6">01</span><span style="width:40px;height:2px;background:linear-gradient(90deg,#9945FF,#14F195)"></span><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Problem</span></div>
+    <div style="margin-top:28px;display:flex;flex-wrap:wrap;gap:24px 64px;align-items:flex-end;justify-content:space-between">
+      <h2 style="flex:1 1 560px;margin:0;font-size:clamp(36px,5vw,72px);font-weight:600;letter-spacing:-.04em;line-height:1.02;max-width:16ch;text-wrap:balance">Handel z nieznajomymi wciąż wymaga zaufania do platformy.</h2>
+      <p style="flex:0 1 420px;margin:0;font-size:18px;line-height:1.55;color:#C9C9D2;text-wrap:pretty">Kupujący płaci obcej osobie za używane ubranie. Pieniądze trzyma platforma, ona pobiera opłatę i ona rozstrzyga spory. Strony nie widzą, według jakich zasad.</p>
+    </div>
+
+    <div style="margin-top:clamp(48px,6vw,88px);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));border-top:1px solid #2A2A35">
+      <div style="padding:28px 28px 28px 0;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid #1E1E26">
+        <span style="font-family:var(--font-mono);font-size:clamp(48px,5.4vw,80px);font-weight:500;letter-spacing:-.05em;line-height:1;color:#FFB547">~30%</span>
+        <span style="font-size:17px;line-height:1.45;color:#F4F4F6;text-wrap:pretty">oszustw wykrytych w sieci Orange w 2024 r. to fałszywe płatności, w tym oszustwo „na kupującego” z portali ogłoszeniowych.</span>
+        <sc-if value="{{ sources }}" hint-placeholder-val="{{ true }}"><a href="https://biuroprasowe.orange.pl/informacje-prasowe/raport-cert-orange-polska-za-rok-2024-oszustwa-na-falszywe-inwestycje-nowe-metody-atakow-wymuszajacych-dane-i-okup-cybertarcza-w-sieci-orange-dziala-juz-10-lat-2/" target="_blank" rel="noreferrer" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78">Źródło: Raport CERT Orange Polska 2024 ↗</a></sc-if>
+      </div>
+      <div style="padding:28px 28px 28px 0;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid #1E1E26">
+        <span style="font-family:var(--font-mono);font-size:clamp(48px,5.4vw,80px);font-weight:500;letter-spacing:-.05em;line-height:1;color:#FFB547">40'000zł</span>
+        <span style="font-size:17px;line-height:1.45;color:#F4F4F6;text-wrap:pretty">tyle dziennie zł może zarabiać jeden oszust, który okrada sprzedających z serwisów ogłoszeniowych.</span>
+        <sc-if value="{{ sources }}" hint-placeholder-val="{{ true }}"><a href="https://biznes.interia.pl/gospodarka/news-oszustwa-na-olx-vinted-i-allegro-ofiarami-coraz-czesciej-spr,nId,7524463" target="_blank" rel="noreferrer" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78">Źródło: CERT Orange Polska via Interia, 2024 ↗</a></sc-if>
+      </div>
+      <div style="padding:28px 0;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid #1E1E26">
+        <span style="font-family:var(--font-mono);font-size:clamp(48px,5.4vw,80px);font-weight:500;letter-spacing:-.05em;line-height:1;color:#FFB547">1,1 mld €</span>
+        <span style="font-size:17px;line-height:1.45;color:#F4F4F6;text-wrap:pretty">przychodu Vinted w 2025 r. Największe źródło to obowiązkowa opłata za ochronę kupującego, która nie wraca nawet przy zwrocie towaru.</span>
+        <sc-if value="{{ sources }}" hint-placeholder-val="{{ true }}"><a href="https://www.revenuememo.com/p/how-does-vinted-make-money" target="_blank" rel="noreferrer" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78">Źródło: Revenue Memo, 2026 ↗</a></sc-if>
+      </div>
+    </div>
+
+    <div style="margin-top:clamp(56px,7vw,104px);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:clamp(20px,2.4vw,32px)">
+      <article style="display:flex;flex-direction:column;gap:20px;min-width:0">
+        <div style="position:relative;aspect-ratio:4/5;border-radius:4px;overflow:hidden;background:#111116">
+          <image-slot id="lp-pFraud" data-res="img_p_fraud_png" shape="rect" placeholder="Upuść zdjęcie" style="position:absolute;inset:0;width:100%;height:100%;color:#9A9AA6"></image-slot>
+          <sc-if value="{{ show.pFraud }}" hint-placeholder-val="{{ true }}">
+            <div data-prompt="" data-format="pionowy 2:3, 1024×1536" style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(135deg,#111116 0 12px,#15151B 12px 24px);padding:18px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Zdjęcie · podmieniony towar</span><sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}"><button sc-camel-on-click="{{ copy }}" style="pointer-events:auto;flex-shrink:0;height:32px;padding:0 12px;border-radius:999px;border:1px solid #2A2A35;background:#050507;color:#F4F4F6;font-family:var(--font-sans);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer" style-hover="border-color:#9945FF"><span style="width:14px;height:14px;display:block;background:currentColor;mask:url(&quot;assets/43e051ea.svg&quot;) center/contain no-repeat"></span>Kopiuj prompt</button></sc-if></div>
+              <sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}">
+                <div data-prompt-text="" style="flex:1;min-height:0;overflow:hidden;font-family:var(--font-mono);font-size:12px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Otwarta tekturowa paczka widziana lekko z góry. Zamiast markowej kurtki w środku leży zmięta, sprana koszulka z dziurą i kawałek cegły owinięty folią bąbelkową. Przecięta taśma zwisa z klap kartonu.</div>
+                <div style="font-size:12px;line-height:1.4;color:#9A9AA6">Kopiuje się razem ze stylem wspólnym i formatem. Gotowy obraz przeciągnij w tę ramkę.</div>
+              </sc-if>
+            </div>
+          </sc-if>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#FFB547">Problem 01</span>
+          <h3 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-.025em;line-height:1.1">Oszustwa na platformach P2P</h3>
+          <p style="margin:0;font-size:16px;line-height:1.55;color:#C9C9D2;text-wrap:pretty">Pusta paczka, podróbka, wada przemilczana w opisie albo fałszywa reklamacja. Bez twardych dowodów spór sprowadza się do słowa jednej strony przeciw słowu drugiej.</p>
+        </div>
+      </article>
+      <article style="display:flex;flex-direction:column;gap:20px;min-width:0">
+        <div style="position:relative;aspect-ratio:4/5;border-radius:4px;overflow:hidden;background:#111116">
+          <image-slot id="lp-pWait" data-res="img_p_wait_png" shape="rect" placeholder="Upuść zdjęcie" style="position:absolute;inset:0;width:100%;height:100%;color:#9A9AA6"></image-slot>
+          <sc-if value="{{ show.pWait }}" hint-placeholder-val="{{ true }}">
+            <div data-prompt="" data-format="pionowy 2:3, 1024×1536" style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(135deg,#111116 0 12px,#15151B 12px 24px);padding:18px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Zdjęcie · czekanie na decyzję</span><sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}"><button sc-camel-on-click="{{ copy }}" style="pointer-events:auto;flex-shrink:0;height:32px;padding:0 12px;border-radius:999px;border:1px solid #2A2A35;background:#050507;color:#F4F4F6;font-family:var(--font-sans);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer" style-hover="border-color:#9945FF"><span style="width:14px;height:14px;display:block;background:currentColor;mask:url(&quot;assets/43e051ea.svg&quot;) center/contain no-repeat"></span>Kopiuj prompt</button></sc-if></div>
+              <sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}">
+                <div data-prompt-text="" style="flex:1;min-height:0;overflow:hidden;font-family:var(--font-mono);font-size:12px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Szklana klepsydra z jasnym piaskiem, w połowie przesypana, stoi obok zaklejonej paczki zwrotnej z naklejoną etykietą. Przed paczką leży smartfon ekranem do góry, ekran wygaszony.</div>
+                <div style="font-size:12px;line-height:1.4;color:#9A9AA6">Kopiuje się razem ze stylem wspólnym i formatem. Gotowy obraz przeciągnij w tę ramkę.</div>
+              </sc-if>
+            </div>
+          </sc-if>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#FFB547">Problem 02</span>
+          <h3 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-.025em;line-height:1.1">Długie czekanie na wynik weryfikacji</h3>
+          <p style="margin:0;font-size:16px;line-height:1.55;color:#C9C9D2;text-wrap:pretty">Reklamację rozpatruje ręcznie support platformy. Pieniądze są w tym czasie zablokowane, a strony nie wiedzą, kiedy zapadnie decyzja ani na jakiej podstawie.</p>
+        </div>
+      </article>
+      <article style="display:flex;flex-direction:column;gap:20px;min-width:0">
+        <div style="position:relative;aspect-ratio:4/5;border-radius:4px;overflow:hidden;background:#111116">
+          <image-slot id="lp-pFees" data-res="img_p_fees_png" shape="rect" placeholder="Upuść zdjęcie" style="position:absolute;inset:0;width:100%;height:100%;color:#9A9AA6"></image-slot>
+          <sc-if value="{{ show.pFees }}" hint-placeholder-val="{{ true }}">
+            <div data-prompt="" data-format="pionowy 2:3, 1024×1536" style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(135deg,#111116 0 12px,#15151B 12px 24px);padding:18px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Zdjęcie · opłaty serwisowe</span><sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}"><button sc-camel-on-click="{{ copy }}" style="pointer-events:auto;flex-shrink:0;height:32px;padding:0 12px;border-radius:999px;border:1px solid #2A2A35;background:#050507;color:#F4F4F6;font-family:var(--font-sans);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer" style-hover="border-color:#9945FF"><span style="width:14px;height:14px;display:block;background:currentColor;mask:url(&quot;assets/43e051ea.svg&quot;) center/contain no-repeat"></span>Kopiuj prompt</button></sc-if></div>
+              <sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}">
+                <div data-prompt-text="" style="flex:1;min-height:0;overflow:hidden;font-family:var(--font-mono);font-size:12px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Złożona używana koszulka leży na środku kadru, a obok niej stoi wysoki, równy stos srebrnych i złotych monet, wyższy niż koszulka. Spod stosu wystaje długi, zwinięty paragon z nieczytelnym nadrukiem.</div>
+                <div style="font-size:12px;line-height:1.4;color:#9A9AA6">Kopiuje się razem ze stylem wspólnym i formatem. Gotowy obraz przeciągnij w tę ramkę.</div>
+              </sc-if>
+            </div>
+          </sc-if>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#FFB547">Problem 03</span>
+          <h3 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-.025em;line-height:1.1">Wysokie opłaty serwisowe</h3>
+          <p style="margin:0;font-size:16px;line-height:1.55;color:#C9C9D2;text-wrap:pretty">Za „ochronę kupującego” płaci się przy każdym zakupie: stałą kwotę plus 5% ceny. Także wtedy, gdy wszystko jest w porządku i żaden spór nie powstaje.</p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="rozwiazanie" data-screen-label="02 Rozwiązanie" style="scroll-margin-top:110px">
+  <div style="max-width:1320px;margin:0 auto;padding:clamp(72px,9vw,136px) clamp(20px,4vw,56px)">
+    <div style="display:flex;align-items:center;gap:14px"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;color:#F4F4F6">02</span><span style="width:40px;height:2px;background:linear-gradient(90deg,#9945FF,#14F195)"></span><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Nasze rozwiązanie</span></div>
+    <div style="margin-top:28px;display:flex;flex-wrap:wrap;gap:24px 64px;align-items:flex-end;justify-content:space-between">
+      <h2 style="flex:1 1 560px;margin:0;font-size:clamp(36px,5vw,72px);font-weight:600;letter-spacing:-.04em;line-height:1.02;max-width:15ch;text-wrap:balance">Pieniądze trzyma umowa. Spór rozstrzygają reguły.</h2>
+      <p style="flex:0 1 460px;margin:0;font-size:20px;line-height:1.5;color:#F4F4F6;text-wrap:pretty">Platforma oparta na kryptowalucie, jasnych kryteriach oceny i bezstronnym AI, który decyduje o zwrocie za pomocą sprawdzenia zgodności opisu oraz zdjęć na podstawie filmu.</p>
+    </div>
+
+    <div style="margin-top:clamp(40px,5vw,72px);position:relative;height:clamp(300px,42vw,600px);border-radius:4px;overflow:hidden;background:#111116">
+      <image-slot id="lp-solPack" data-res="img_sol_pack_png" shape="rect" placeholder="Upuść zdjęcie" style="position:absolute;inset:0;width:100%;height:100%;color:#9A9AA6"></image-slot>
+      <sc-if value="{{ show.solPack }}" hint-placeholder-val="{{ true }}">
+        <div data-prompt="" data-format="poziomy 3:2, 1536×1024" style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(135deg,#111116 0 12px,#15151B 12px 24px);padding:18px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Zdjęcie · karta QR w paczce · 3:2</span><sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}"><button sc-camel-on-click="{{ copy }}" style="pointer-events:auto;flex-shrink:0;height:32px;padding:0 12px;border-radius:999px;border:1px solid #2A2A35;background:#050507;color:#F4F4F6;font-family:var(--font-sans);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer" style-hover="border-color:#9945FF"><span style="width:14px;height:14px;display:block;background:currentColor;mask:url(&quot;assets/43e051ea.svg&quot;) center/contain no-repeat"></span>Kopiuj prompt</button></sc-if></div>
+          <sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}">
+            <div data-prompt-text="" style="flex:1;min-height:0;overflow:hidden;max-width:68ch;font-family:var(--font-mono);font-size:12px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Szeroki kadr. Dłonie kładą małą białą kartę z czarnym kodem QR na starannie złożonym swetrze w otwartym kartonie. Po prawej rolka taśmy pakowej i wydrukowana etykieta przewoźnika z nieczytelnym kodem kreskowym. Nad kartonem smartfon na statywie z małą czerwoną kropką nagrywania.</div>
+            <div style="font-size:12px;line-height:1.4;color:#9A9AA6">Kopiuje się razem ze stylem wspólnym i formatem. Gotowy obraz przeciągnij w tę ramkę.</div>
+          </sc-if>
+        </div>
+      </sc-if>
+    </div>
+
+    <div style="margin-top:clamp(48px,6vw,88px);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:clamp(28px,3vw,48px)">
+      <div style="display:flex;flex-direction:column;gap:14px;padding-top:24px;border-top:1px solid #2A2A35">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><span style="width:26px;height:26px;display:block;color:#14F195;background:currentColor;mask:url(&quot;assets/9dd8ab6e.svg&quot;) center/contain no-repeat"></span><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Kryptowaluta</span></div>
+        <h3 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-.025em;line-height:1.15">Pieniądze czekają w umowie</h3>
+        <p style="margin:0;font-size:16px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Kupujący płaci do umowy na Solanie, a nie platformie ani sprzedającemu. Umowa wypłaca środki tylko według swoich zasad. Nikt, także my, nie może ich zatrzymać ani przelać komuś innemu. Kupujący płaci tylko opłatę sieci, ułamek grosza.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;padding-top:24px;border-top:1px solid #2A2A35">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><span style="width:26px;height:26px;display:block;color:#F4F4F6;background:currentColor;mask:url(&quot;assets/05c67210.svg&quot;) center/contain no-repeat"></span><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Jasne kryteria</span></div>
+        <h3 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-.025em;line-height:1.15">Te same zasady dla każdego</h3>
+        <p style="margin:0;font-size:16px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Terminy, uprawnienia i sposób oceny reklamacji są jawne i nie zmieniają się w trakcie sprawy. Każdy etap ma termin. Gdy ktoś nie zdąży, wiadomo z góry, co stanie się z pieniędzmi.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;padding-top:24px;border-top:1px solid #2A2A35">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><span style="width:26px;height:26px;display:block;color:#F4F4F6;background:currentColor;mask:url(&quot;assets/f1d4a9ed.svg&quot;) center/contain no-repeat"></span><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Bezstronne AI</span></div>
+        <h3 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-.025em;line-height:1.15">Opis i zdjęcia kontra film</h3>
+        <p style="margin:0;font-size:16px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">AI sprawdza, czy to, co widać na nagraniach pakowania i otwarcia, zgadza się z opisem i zdjęciami ogłoszenia. Może wskazać tylko kupującego albo sprzedającego i robi to w &lt;5 minut.</p>
+      </div>
+    </div>
+
+    <div style="margin-top:clamp(64px,8vw,112px);display:flex;flex-wrap:wrap;gap:clamp(28px,4vw,64px);align-items:center">
+      <div style="flex:1 1 300px;max-width:480px;min-width:0;position:relative;aspect-ratio:4/5;border-radius:4px;overflow:hidden;background:#111116">
+        <image-slot id="lp-solPair" data-res="img_sol_pair_png" shape="rect" placeholder="Upuść zdjęcie" style="position:absolute;inset:0;width:100%;height:100%;color:#9A9AA6"></image-slot>
+        <sc-if value="{{ show.solPair }}" hint-placeholder-val="{{ true }}">
+          <div data-prompt="" data-format="pionowy 2:3, 1024×1536" style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(135deg,#111116 0 12px,#15151B 12px 24px);padding:18px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Zdjęcie · ta sama paczka</span><sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}"><button sc-camel-on-click="{{ copy }}" style="pointer-events:auto;flex-shrink:0;height:32px;padding:0 12px;border-radius:999px;border:1px solid #2A2A35;background:#050507;color:#F4F4F6;font-family:var(--font-sans);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer" style-hover="border-color:#9945FF"><span style="width:14px;height:14px;display:block;background:currentColor;mask:url(&quot;assets/43e051ea.svg&quot;) center/contain no-repeat"></span>Kopiuj prompt</button></sc-if></div>
+            <sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}">
+              <div data-prompt-text="" style="flex:1;min-height:0;overflow:hidden;font-family:var(--font-mono);font-size:12px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Dwie identyczne paczki ustawione jedna nad drugą jak w dyptyku. Górna zaklejona charakterystyczną taśmą w ukośne paski, z etykietą przewoźnika. Dolna to ta sama paczka z tą samą taśmą i etykietą, ale rozcięta i otwarta, w środku złożona kurtka jeansowa i biała karta z kodem QR.</div>
+              <div style="font-size:12px;line-height:1.4;color:#9A9AA6">Kopiuje się razem ze stylem wspólnym i formatem. Gotowy obraz przeciągnij w tę ramkę.</div>
+            </sc-if>
+          </div>
+        </sc-if>
+      </div>
+      <div style="flex:1.3 1 420px;min-width:0;display:flex;flex-direction:column;gap:22px">
+        <span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Jak AI ocenia reklamację</span>
+        <h3 style="margin:0;font-size:clamp(28px,3.2vw,44px);font-weight:600;letter-spacing:-.035em;line-height:1.05;text-wrap:balance">Dwa nagrania, jedno ogłoszenie, pięć reguł.</h3>
+        <p style="margin:0;font-size:17px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">AI ogląda nagranie pakowania i otwarcia, porównuje je z opisem, zdjęciami i listą wad, po czym zapisuje, co widzi. Wynik wynika z tych samych reguł dla każdej sprawy. Uzasadnienie jest dostępne dla obu stron.</p>
+        <div style="display:flex;flex-direction:column;border-top:1px solid #2A2A35">
+          <div style="display:flex;gap:16px;justify-content:space-between;padding:12px 0;border-bottom:1px solid #2A2A35"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#6B6B78">Zasada</span><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#6B6B78">Werdykt</span></div>
+          <div style="display:flex;gap:16px;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #1E1E26"><span style="font-size:16px;line-height:1.4">Nagranie otwarcia ucięte, zasłonięte albo nieczytelne</span><span style="flex-shrink:0;font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#C9C9D2;border:1px solid #2A2A35;border-radius:999px;padding:6px 12px">Sprzedający</span></div>
+          <div style="display:flex;gap:16px;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #1E1E26"><span style="font-size:16px;line-height:1.4">Otwarta paczka różni się od tej z nagrania nadania</span><span style="flex-shrink:0;font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#C9C9D2;border:1px solid #2A2A35;border-radius:999px;padding:6px 12px">Sprzedający</span></div>
+          <div style="display:flex;gap:16px;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #1E1E26"><span style="font-size:16px;line-height:1.4">Przedmiot niezgodny z opisem</span><span style="flex-shrink:0;font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#14F195;border:1px solid #14F195;border-radius:999px;padding:6px 12px">Kupujący</span></div>
+          <div style="display:flex;gap:16px;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #1E1E26"><span style="font-size:16px;line-height:1.4">Wada, której nie było w ogłoszeniu</span><span style="flex-shrink:0;font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#14F195;border:1px solid #14F195;border-radius:999px;padding:6px 12px">Kupujący</span></div>
+          <div style="display:flex;gap:16px;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #1E1E26"><span style="font-size:16px;line-height:1.4">Wszystko zgodne z ogłoszeniem</span><span style="flex-shrink:0;font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#C9C9D2;border:1px solid #2A2A35;border-radius:999px;padding:6px 12px">Sprzedający</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="jak-dziala" data-screen-label="03 Jak to działa" style="scroll-margin-top:110px;background:#0B0B0F;border-top:1px solid #1E1E26">
+  <div style="max-width:1320px;margin:0 auto;padding:clamp(72px,9vw,136px) clamp(20px,4vw,56px) clamp(48px,6vw,88px)">
+    <div style="display:flex;align-items:center;gap:14px"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;color:#F4F4F6">03</span><span style="width:40px;height:2px;background:linear-gradient(90deg,#9945FF,#14F195)"></span><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#9A9AA6">Jak to działa</span></div>
+    <div style="margin-top:28px;margin-bottom:clamp(40px,5vw,72px);display:flex;flex-wrap:wrap;gap:24px 64px;align-items:flex-end;justify-content:space-between">
+      <h2 style="flex:1 1 560px;margin:0;font-size:clamp(36px,5vw,72px);font-weight:600;letter-spacing:-.04em;line-height:1.02;max-width:15ch;text-wrap:balance">{{ stepTitle }}</h2>
+      <p style="flex:0 1 420px;margin:0;font-size:18px;line-height:1.55;color:#C9C9D2;text-wrap:pretty">Wybierz swoją stronę transakcji. Ekrany pochodzą z prototypu aplikacji.</p>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:8px"><div role="tablist" style="display:flex;gap:4px;padding:4px;border-radius:999px;background:#14141A;border:1px solid #2A2A35"><button sc-camel-on-click="{{ setBuyer }}" style="height:44px;padding:0 20px;border-radius:999px;border:none;cursor:pointer;display:flex;align-items:center;gap:8px;font-family:var(--font-sans);font-size:16px;font-weight:600;background:{{ buyerBg }};color:{{ buyerFg }}"><span style="width:18px;height:18px;display:block;background:currentColor;mask:url(&quot;assets/c0d69871.svg&quot;) center/contain no-repeat"></span>Kupujący</button><button sc-camel-on-click="{{ setSeller }}" style="height:44px;padding:0 20px;border-radius:999px;border:none;cursor:pointer;display:flex;align-items:center;gap:8px;font-family:var(--font-sans);font-size:16px;font-weight:600;background:{{ sellerBg }};color:{{ sellerFg }}"><span style="width:18px;height:18px;display:block;background:currentColor;mask:url(&quot;assets/5bfd32d2.svg&quot;) center/contain no-repeat"></span>Sprzedający</button></div></div>
+    <sc-if value="{{ isBuyer }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-wrap:wrap;gap:clamp(28px,4vw,64px);align-items:center;justify-content:space-between;padding:clamp(48px,6vw,88px) 0;border-top:1px solid #1E1E26">
+      <div style="flex:1 1 320px;min-width:0;max-width:520px;display:flex;flex-direction:column;gap:18px">
+        <span style="font-family:var(--font-mono);font-size:14px;font-weight:500;color:#6B6B78">01 / 03</span>
+        <h3 style="margin:0;font-size:clamp(30px,3.4vw,46px);font-weight:600;letter-spacing:-.035em;line-height:1.04">Zapłać bez opłaty za ochronę</h3>
+        <p style="margin:0;font-size:17px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Pieniądze trafiają do umowy, a nie do sprzedającego ani platformy. Od razu widzisz, kto oceni ewentualną reklamację. Jeśli paczka nie zostanie nadana w terminie, sam odbierasz pieniądze jednym przyciskiem.</p>
+        <div style="display:flex;gap:16px;padding:12px 0;border-top:1px solid #1E1E26;border-bottom:1px solid #1E1E26;align-items:baseline;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#6B6B78">Status</span><span style="font-size:15px">Opłacone → W drodze</span></div>
+      </div>
+      <div style="flex:0 0 auto;margin:0 auto;zoom:.74;width:414px;height:868px;padding:11px;border-radius:58px;background:#000;border:1px solid #2A2A35;box-sizing:border-box">
+        <div style="width:390px;height:844px;border-radius:46px;overflow:hidden;background:#0B0B0F;display:flex;flex-direction:column;position:relative;color:#F4F4F6;font-family:var(--font-sans)">
+          <div style="height:46px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 28px 0 34px;position:relative"><span style="font-size:16px;font-weight:600">9:41</span><span style="position:absolute;left:50%;top:11px;margin-left:-58px;width:116px;height:32px;border-radius:20px;background:#000"></span><span style="display:flex;gap:5px;align-items:center"><span style="width:17px;height:17px;display:block;background:currentColor;mask:url(&quot;assets/7832a545.svg&quot;) center/contain no-repeat"></span><span style="width:17px;height:17px;display:block;background:currentColor;mask:url(&quot;assets/3dd88288.svg&quot;) center/contain no-repeat"></span><span style="width:22px;height:22px;display:block;background:currentColor;mask:url(&quot;assets/616c0ad2.svg&quot;) center/contain no-repeat"></span></span></div>
+          <div style="height:34px;padding:0 20px;display:flex;align-items:center;gap:8px;flex-shrink:0;border-bottom:1px solid #1E1E26"><span style="width:8px;height:8px;border-radius:8px;background:#9945FF"></span><span style="font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#C9C9D2">Kupujący · sieć testowa</span></div>
+          <div style="flex:1;min-height:0;position:relative">
+            <div style="position:absolute;inset:0;background:var(--photo-placeholder)"><image-slot id="lp-scr-listing" data-res="img_scr_a_jacket_png" shape="rect" placeholder="Zdjęcie A" style="position:absolute;inset:0;width:100%;height:100%;color:#9A9AA6;pointer-events:auto"></image-slot></div>
+            <div style="position:absolute;inset:0;background:rgba(0,0,0,.55);pointer-events:none"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;background:#0B0B0F;border-radius:16px 16px 0 0;padding:10px 20px 32px;display:flex;flex-direction:column;gap:16px;box-shadow:0 -12px 40px rgba(0,0,0,.5)">
+              <span style="align-self:center;width:40px;height:4px;border-radius:4px;background:#2A2A35"></span>
+              <div style="font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.1">Zapłać do umowy</div>
+              <div style="display:flex;gap:12px;align-items:center"><span style="width:56px;height:56px;flex-shrink:0;border-radius:4px;overflow:hidden;position:relative;background:var(--photo-placeholder)"><image-slot id="lp-scr-thumb1" data-res="img_scr_a_jacket_png" shape="rect" placeholder="A" style="position:absolute;inset:0;width:100%;height:100%;color:#9A9AA6;pointer-events:auto"></image-slot></span><div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span style="font-size:16px">Kurtka jeansowa Trucker</span><span style="font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78">Levi's · M · Bardzo dobry</span></div></div>
+              <div style="display:flex;flex-direction:column;border-top:1px solid #1E1E26">
+                <div style="display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #1E1E26"><span style="font-size:15px;color:#C9C9D2">Cena</span><span style="font-family:var(--font-mono);font-size:15px">0.35 SOL <span style="color:#6B6B78">≈ 260 zł</span></span></div>
+                <div style="display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #1E1E26"><span style="font-size:15px;color:#C9C9D2">Opłata za ochronę</span><span style="font-family:var(--font-mono);font-size:15px;color:#14F195">0 zł</span></div>
+                <div style="display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #1E1E26"><span style="font-size:15px;color:#C9C9D2">Opłata sieci</span><span style="font-family:var(--font-mono);font-size:15px">ułamek grosza</span></div>
+                <div style="display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #1E1E26"><span style="font-size:15px;color:#C9C9D2">Ocenia reklamacje</span><span style="font-family:var(--font-mono);font-size:15px;color:#C9C9D2">Sellsor AI · 9xQe…F3kd</span></div>
+              </div>
+              <div style="border:1px solid #14F195;border-radius:8px;padding:14px;display:flex;gap:12px"><span style="width:18px;height:18px;flex-shrink:0;margin-top:2px;display:block;color:#14F195;background:currentColor;mask:url(&quot;assets/9dd8ab6e.svg&quot;) center/contain no-repeat"></span><span style="font-size:14px;line-height:1.45;color:#C9C9D2">Środki trafią do umowy, nie do nas. AI może wskazać tylko Ciebie albo sprzedającego.</span></div>
+              <span style="height:56px;border-radius:999px;background:#9945FF;color:#fff;font-size:17px;font-weight:600;display:flex;align-items:center;justify-content:center">Zapłać 0.35 SOL</span>
+            </div>
+          </div>
+          <span style="position:absolute;bottom:8px;left:50%;margin-left:-67px;width:134px;height:5px;border-radius:5px;background:#F4F4F6"></span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:clamp(28px,4vw,64px);align-items:center;justify-content:space-between;padding:clamp(48px,6vw,88px) 0;border-top:1px solid #1E1E26">
+      <div style="flex:0 0 auto;margin:0 auto;zoom:.74;width:414px;height:868px;padding:11px;border-radius:58px;background:#000;border:1px solid #2A2A35;box-sizing:border-box">
+        <div style="width:390px;height:844px;border-radius:46px;overflow:hidden;background:#0B0B0F;display:flex;flex-direction:column;position:relative;color:#F4F4F6;font-family:var(--font-sans)">
+          <div style="height:46px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 28px 0 34px;position:relative"><span style="font-size:16px;font-weight:600">9:41</span><span style="position:absolute;left:50%;top:11px;margin-left:-58px;width:116px;height:32px;border-radius:20px;background:#000"></span><span style="display:flex;gap:5px;align-items:center"><span style="width:17px;height:17px;display:block;background:currentColor;mask:url(&quot;assets/7832a545.svg&quot;) center/contain no-repeat"></span><span style="width:17px;height:17px;display:block;background:currentColor;mask:url(&quot;assets/3dd88288.svg&quot;) center/contain no-repeat"></span><span style="width:22px;height:22px;display:block;background:currentColor;mask:url(&quot;assets/616c0ad2.svg&quot;) center/contain no-repeat"></span></span></div>
+          <div style="height:34px;padding:0 20px;display:flex;align-items:center;gap:8px;flex-shrink:0;border-bottom:1px solid #1E1E26"><span style="width:8px;height:8px;border-radius:8px;background:#9945FF"></span><span style="font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#C9C9D2">Kupujący · sieć testowa</span></div>
+          <div style="height:56px;padding:0 20px;display:flex;align-items:center;flex-shrink:0"><div style="flex:1;font-size:20px;font-weight:600">Jak przesyłka?</div></div>
+          <div style="flex:1;min-height:0;overflow:hidden;padding:4px 20px 16px;display:flex;flex-direction:column;gap:14px">
+            <div style="height:150px;flex-shrink:0;border-radius:4px;overflow:hidden;background:var(--photo-placeholder);position:relative;display:flex;align-items:center;justify-content:center"><image-slot id="lp-scr-video" data-res="img_scr_c_video_png" shape="rect" placeholder="Zdjęcie C" style="position:absolute;inset:0;width:100%;height:100%;color:#9A9AA6;pointer-events:auto"></image-slot><span style="position:relative;pointer-events:none;width:52px;height:52px;border-radius:52px;background:rgba(5,5,7,.72);display:flex;align-items:center;justify-content:center"><span style="width:22px;height:22px;display:block;background:currentColor;mask:url(&quot;assets/4321204a.svg&quot;) center/contain no-repeat"></span></span><span style="position:absolute;left:10px;bottom:10px;pointer-events:none;font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#F4F4F6;background:rgba(5,5,7,.72);padding:3px 6px;border-radius:4px">nagranie otwarcia · 01:12</span></div>
+            <div style="display:flex;gap:8px;align-items:center"><span style="width:18px;height:18px;display:block;color:#14F195;background:currentColor;mask:url(&quot;assets/38b3ed39.svg&quot;) center/contain no-repeat"></span><span style="font-size:15px;color:#C9C9D2">Kod z karty w paczce potwierdzony</span></div>
+            <div style="font-size:26px;font-weight:600;letter-spacing:-.02em;line-height:1.08">Zgadza się z opisem?</div>
+            <div style="font-size:15px;color:#C9C9D2;line-height:1.45">Zdecyduj teraz. „Wszystko OK” przekazuje 0.35 SOL (≈ 260 zł) sprzedającemu – tego nie da się cofnąć.</div>
+            <div style="border-top:1px solid #1E1E26;padding-top:14px;display:flex;flex-direction:column;gap:10px">
+              <span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78">Jeśli reklamujesz – kategoria</span>
+              <div style="display:flex;flex-wrap:wrap;gap:8px"><span style="height:38px;padding:0 14px;border-radius:999px;font-size:14px;font-weight:500;display:flex;align-items:center;background:rgba(255,181,71,.12);color:#FFB547;border:2px solid #FFB547">Wada nieujawniona w opisie</span><span style="height:38px;padding:0 14px;border-radius:999px;font-size:14px;font-weight:500;display:flex;align-items:center;color:#C9C9D2;border:2px solid #2A2A35">Inny przedmiot</span><span style="height:38px;padding:0 14px;border-radius:999px;font-size:14px;font-weight:500;display:flex;align-items:center;color:#C9C9D2;border:2px solid #2A2A35">Inny rozmiar</span></div>
+              <div style="border:1px solid #2A2A35;border-radius:4px;padding:12px 14px;font-size:15px;line-height:1.45">Plama na przodzie kurtki, której nie ma w opisie ani na zdjęciach.</div>
+            </div>
+          </div>
+          <div style="padding:10px 20px 30px;display:flex;flex-direction:column;gap:12px">
+            <span style="height:54px;border-radius:999px;background:#14F195;color:#050507;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px"><span style="width:18px;height:18px;display:block;background:currentColor;mask:url(&quot;assets/31a38361.svg&quot;) center/contain no-repeat"></span>Wszystko OK</span>
+            <span style="height:54px;border-radius:999px;border:2px solid #FFB547;color:#FFB547;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;box-sizing:border-box">Reklamuję</span>
+          </div>
+          <span style="position:absolute;bottom:8px;left:50%;margin-left:-67px;width:134px;height:5px;border-radius:5px;background:#F4F4F6"></span>
+        </div>
+      </div>
+      <div style="flex:1 1 320px;min-width:0;max-width:520px;display:flex;flex-direction:column;gap:18px">
+        <span style="font-family:var(--font-mono);font-size:14px;font-weight:500;color:#6B6B78">02 / 03</span>
+        <h3 style="margin:0;font-size:clamp(30px,3.4vw,46px);font-weight:600;letter-spacing:-.035em;line-height:1.04">Nagraj otwarcie i zdecyduj</h3>
+        <p style="margin:0;font-size:17px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Nagrywasz otwarcie od zamkniętej paczki. Zaraz potem wybierasz: „Wszystko OK” przekazuje pieniądze sprzedającemu, „Reklamuję” wysyła nagranie do oceny.</p>
+        <div style="display:flex;gap:16px;padding:12px 0;border-top:1px solid #1E1E26;border-bottom:1px solid #1E1E26;align-items:baseline;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#6B6B78">Status</span><span style="font-size:15px">W drodze → Zakończone albo Reklamacja</span></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:clamp(28px,4vw,64px);align-items:center;justify-content:space-between;padding:clamp(48px,6vw,88px) 0 0;border-top:1px solid #1E1E26">
+      <div style="flex:1 1 320px;min-width:0;max-width:520px;display:flex;flex-direction:column;gap:18px">
+        <span style="font-family:var(--font-mono);font-size:14px;font-weight:500;color:#6B6B78">03 / 03</span>
+        <h3 style="margin:0;font-size:clamp(30px,3.4vw,46px);font-weight:600;letter-spacing:-.035em;line-height:1.04">Werdykt w 24 godziny</h3>
+        <p style="margin:0;font-size:17px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">AI porównuje nagrania z opisem i zdjęciami ogłoszenia. Widzisz sprawdzone warunki i uzasadnienie. Gdy reklamacja jest uznana, odsyłasz towar, a pieniądze wracają do Ciebie.</p>
+        <div style="display:flex;gap:16px;padding:12px 0;border-top:1px solid #1E1E26;border-bottom:1px solid #1E1E26;align-items:baseline;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#6B6B78">Status</span><span style="font-size:15px">Reklamacja → Zwrot pieniędzy</span></div>
+      </div>
+      <div style="flex:0 0 auto;margin:0 auto;zoom:.74;width:414px;height:868px;padding:11px;border-radius:58px;background:#000;border:1px solid #2A2A35;box-sizing:border-box">
+        <div style="width:390px;height:844px;border-radius:46px;overflow:hidden;background:#0B0B0F;display:flex;flex-direction:column;position:relative;color:#F4F4F6;font-family:var(--font-sans)">
+          <div style="height:46px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 28px 0 34px;position:relative"><span style="font-size:16px;font-weight:600">9:41</span><span style="position:absolute;left:50%;top:11px;margin-left:-58px;width:116px;height:32px;border-radius:20px;background:#000"></span><span style="display:flex;gap:5px;align-items:center"><span style="width:17px;height:17px;display:block;background:currentColor;mask:url(&quot;assets/7832a545.svg&quot;) center/contain no-repeat"></span><span style="width:17px;height:17px;display:block;background:currentColor;mask:url(&quot;assets/3dd88288.svg&quot;) center/contain no-repeat"></span><span style="width:22px;height:22px;display:block;background:currentColor;mask:url(&quot;assets/616c0ad2.svg&quot;) center/contain no-repeat"></span></span></div>
+          <div style="height:34px;padding:0 20px;display:flex;align-items:center;gap:8px;flex-shrink:0;border-bottom:1px solid #1E1E26"><span style="width:8px;height:8px;border-radius:8px;background:#9945FF"></span><span style="font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#C9C9D2">Kupujący · sieć testowa</span></div>
+          <div style="height:56px;padding:0 20px;display:flex;align-items:center;gap:10px;flex-shrink:0"><span style="width:26px;height:26px;margin-left:-6px;display:block;background:currentColor;mask:url(&quot;assets/31c3cc79.svg&quot;) center/contain no-repeat"></span><div style="flex:1;font-size:20px;font-weight:600">Ocena reklamacji</div><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78">reguły v1</span></div>
+          <div style="flex:1;min-height:0;overflow:hidden;padding:4px 20px 16px;display:flex;flex-direction:column;gap:14px">
+            <div style="font-size:30px;font-weight:600;letter-spacing:-.03em;line-height:1.05">Reklamacja uznana</div>
+            <span style="align-self:flex-start;padding:8px 14px;border-radius:999px;border:2px solid #14F195;color:#14F195;font-size:16px;font-weight:700">Na korzyść kupującego</span>
+            <div>
+              <div style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78;margin-bottom:2px">Sprawdzone warunki</div>
+              <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #1E1E26"><span style="flex:1;font-size:15px">Nagranie otwarcia bez cięć</span><span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:#14F195">TAK</span></div>
+              <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #1E1E26"><span style="flex:1;font-size:15px">Zaczyna się od zaklejonej paczki</span><span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:#14F195">TAK</span></div>
+              <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #1E1E26"><span style="flex:1;font-size:15px">Kod widoczny dopiero po otwarciu</span><span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:#14F195">TAK</span></div>
+              <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #1E1E26"><span style="flex:1;font-size:15px">Paczka zgodna z nagraniem nadania</span><span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:#14F195">TAK</span></div>
+              <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #1E1E26"><span style="flex:1;font-size:15px">Przedmiot zgodny z ogłoszeniem</span><span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:#FFB547">NIE</span></div>
+              <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #1E1E26;align-items:flex-start"><div style="flex:1"><div style="font-size:15px">Wada nieujawniona w opisie</div><div style="font-family:var(--font-mono);font-size:13px;color:#FFB547;margin-top:3px">plama na przodzie · 00:37–00:44</div></div><span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:#FFB547">JEST</span></div>
+              <div style="padding:12px 0;font-size:17px;font-weight:700;color:#14F195">→ Zwrot towaru, potem zwrot pieniędzy</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78">Opis nagrań przygotowany przez AI</span><div style="font-size:15px;color:#C9C9D2;line-height:1.45">Ciągłe nagranie od zaklejonej paczki. Na przodzie kurtki plama ok. 3 cm, nieobecna na zdjęciach i liście wad.</div></div>
+          </div>
+          <div style="padding:10px 20px 30px;border-top:1px solid #1E1E26"><span style="height:54px;border-radius:999px;background:#9945FF;color:#fff;font-size:17px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px"><span style="width:18px;height:18px;display:block;background:currentColor;mask:url(&quot;assets/5bfd32d2.svg&quot;) center/contain no-repeat"></span>Spakuj zwrot</span></div>
+          <span style="position:absolute;bottom:8px;left:50%;margin-left:-67px;width:134px;height:5px;border-radius:5px;background:#F4F4F6"></span>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+    <sc-if value="{{ isSeller }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-wrap:wrap;gap:clamp(28px,4vw,64px);align-items:center;justify-content:space-between;padding:clamp(48px,6vw,88px) 0;border-top:1px solid #1E1E26">
+      <div style="flex:0 0 auto;margin:0 auto;zoom:.74;width:414px;height:868px;padding:11px;border-radius:58px;background:#000;border:1px solid #2A2A35;box-sizing:border-box">
+        <div style="width:390px;height:844px;border-radius:46px;overflow:hidden;background:#0B0B0F;display:flex;flex-direction:column;position:relative;color:#F4F4F6;font-family:var(--font-sans)">
+          <div style="height:46px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 28px 0 34px;position:relative"><span style="font-size:16px;font-weight:600">9:41</span><span style="position:absolute;left:50%;top:11px;margin-left:-58px;width:116px;height:32px;border-radius:20px;background:#000"></span><span style="display:flex;gap:5px;align-items:center"><span style="width:17px;height:17px;display:block;background:currentColor;mask:url(&quot;assets/7832a545.svg&quot;) center/contain no-repeat"></span><span style="width:17px;height:17px;display:block;background:currentColor;mask:url(&quot;assets/3dd88288.svg&quot;) center/contain no-repeat"></span><span style="width:22px;height:22px;display:block;background:currentColor;mask:url(&quot;assets/616c0ad2.svg&quot;) center/contain no-repeat"></span></span></div>
+          <div style="height:34px;padding:0 20px;display:flex;align-items:center;gap:8px;flex-shrink:0;border-bottom:1px solid #1E1E26"><span style="width:8px;height:8px;border-radius:8px;background:#5CF7B8"></span><span style="font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#C9C9D2">Sprzedający · sieć testowa</span></div>
+          <div style="flex:1;min-height:0;display:flex;flex-direction:column;position:relative;color:#fff;pointer-events:none">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#0e0e12 0 14px,#121217 14px 28px)"><image-slot id="lp-scr-camera" data-res="img_scr_b_camera_png" shape="rect" placeholder="Zdjęcie B" style="position:absolute;inset:0;width:100%;height:100%;color:#9A9AA6;pointer-events:auto"></image-slot><div style="position:absolute;inset:0;background:rgba(0,0,0,.3);pointer-events:none"></div></div>
+            <div style="position:relative;height:4px;background:rgba(255,255,255,.18)"><div style="height:4px;width:34%;background:#14F195"></div></div>
+            <div style="position:relative;padding:8px 16px;display:flex;justify-content:space-between;align-items:center">
+              <span style="background:rgba(5,5,7,.72);border-radius:44px;width:44px;height:44px;display:flex;align-items:center;justify-content:center"><span style="width:22px;height:22px;display:block;background:currentColor;mask:url(&quot;assets/1722aac9.svg&quot;) center/contain no-repeat"></span></span>
+              <span style="display:flex;align-items:center;gap:8px;background:rgba(5,5,7,.72);padding:8px 14px;border-radius:99px;font-family:var(--font-mono);font-size:15px"><span style="width:9px;height:9px;border-radius:9px;background:#FF6B6B"></span>00:41 / 02:00</span>
+              <span style="font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;background:rgba(5,5,7,.72);padding:8px 12px;border-radius:99px">Pakowanie</span>
+            </div>
+            <div style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px">
+              <div style="width:200px;height:200px;border:3px solid #14F195;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#14F195"><span style="width:64px;height:64px;display:block;background:currentColor;mask:url(&quot;assets/1bbf44ef.svg&quot;) center/contain no-repeat"></span></div>
+              <div style="display:flex;flex-direction:column;gap:8px;background:rgba(5,5,7,.72);padding:12px 16px;border-radius:8px;min-width:260px">
+                <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:#14F195"><span style="width:16px;height:16px;display:block;background:currentColor;mask:url(&quot;assets/31a38361.svg&quot;) center/contain no-repeat"></span>Ubranie w kadrze</div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:#14F195"><span style="width:16px;height:16px;display:block;background:currentColor;mask:url(&quot;assets/31a38361.svg&quot;) center/contain no-repeat"></span>Karta z kodem w paczce</div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:#9A9AA6"><span style="width:16px;height:16px;display:block;background:currentColor;mask:url(&quot;assets/31a38361.svg&quot;) center/contain no-repeat"></span>Paczka zaklejona</div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:#9A9AA6"><span style="width:16px;height:16px;display:block;background:currentColor;mask:url(&quot;assets/31a38361.svg&quot;) center/contain no-repeat"></span>Etykieta przewoźnika</div>
+              </div>
+            </div>
+            <div style="position:relative;padding:0 20px 30px;display:flex;flex-direction:column;align-items:center;gap:16px">
+              <span style="display:flex;align-items:center;gap:8px;background:#14F195;color:#050507;padding:10px 16px;border-radius:99px;font-weight:700;font-size:16px"><span style="width:18px;height:18px;display:block;background:currentColor;mask:url(&quot;assets/38b3ed39.svg&quot;) center/contain no-repeat"></span>Kod w kadrze</span>
+              <div style="font-size:15px;color:#ddd;text-align:center;max-width:300px;line-height:1.45">Zaklej paczkę i pokaż etykietę przewoźnika.</div>
+              <span style="width:78px;height:78px;border-radius:78px;border:4px solid #fff;display:flex;align-items:center;justify-content:center;box-sizing:border-box"><span style="width:30px;height:30px;border-radius:6px;background:#FF6B6B"></span></span>
+            </div>
+          </div>
+          <span style="position:absolute;bottom:8px;left:50%;margin-left:-67px;width:134px;height:5px;border-radius:5px;background:#F4F4F6"></span>
+        </div>
+      </div>
+      <div style="flex:1 1 320px;min-width:0;max-width:520px;display:flex;flex-direction:column;gap:18px">
+        <span style="font-family:var(--font-mono);font-size:14px;font-weight:500;color:#6B6B78">01 / 02</span>
+        <h3 style="margin:0;font-size:clamp(30px,3.4vw,46px);font-weight:600;letter-spacing:-.035em;line-height:1.04">Wystaw i spakuj przed kamerą</h3>
+        <p style="margin:0;font-size:17px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Dodajesz zdjęcia, opis i listę wad. Po sprzedaży aplikacja tworzy kod QR do wydruku, a Ty nagrywasz pakowanie z kartą w środku. To nagranie chroni Cię przed fałszywą reklamacją.</p>
+        <div style="display:flex;gap:16px;padding:12px 0;border-top:1px solid #1E1E26;border-bottom:1px solid #1E1E26;align-items:baseline;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#6B6B78">Status</span><span style="font-size:15px">Wystawione → Opłacone → W drodze</span></div>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:clamp(28px,4vw,64px);align-items:center;justify-content:space-between;padding:clamp(48px,6vw,88px) 0 0;border-top:1px solid #1E1E26">
+      <div style="flex:1 1 320px;min-width:0;max-width:520px;display:flex;flex-direction:column;gap:18px">
+        <span style="font-family:var(--font-mono);font-size:14px;font-weight:500;color:#6B6B78">02 / 02</span>
+        <h3 style="margin:0;font-size:clamp(30px,3.4vw,46px);font-weight:600;letter-spacing:-.035em;line-height:1.04">Odbierz pieniądze</h3>
+        <p style="margin:0;font-size:17px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Gdy kupujący potwierdzi odbiór albo minie czas na reklamację, umowa sama przelewa pieniądze na Twój portfel. Nikt nie musi tego zatwierdzać.</p>
+        <div style="display:flex;gap:16px;padding:12px 0;border-top:1px solid #1E1E26;border-bottom:1px solid #1E1E26;align-items:baseline;flex-wrap:wrap"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#6B6B78">Status</span><span style="font-size:15px">Zakończone → Wypłacone</span></div>
+      </div>
+      <div style="flex:0 0 auto;margin:0 auto;zoom:.74;width:414px;height:868px;padding:11px;border-radius:58px;background:#000;border:1px solid #2A2A35;box-sizing:border-box">
+        <div style="width:390px;height:844px;border-radius:46px;overflow:hidden;background:#0B0B0F;display:flex;flex-direction:column;position:relative;color:#F4F4F6;font-family:var(--font-sans)">
+          <div style="height:46px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 28px 0 34px;position:relative"><span style="font-size:16px;font-weight:600">9:41</span><span style="position:absolute;left:50%;top:11px;margin-left:-58px;width:116px;height:32px;border-radius:20px;background:#000"></span><span style="display:flex;gap:5px;align-items:center"><span style="width:17px;height:17px;display:block;background:currentColor;mask:url(&quot;assets/7832a545.svg&quot;) center/contain no-repeat"></span><span style="width:17px;height:17px;display:block;background:currentColor;mask:url(&quot;assets/3dd88288.svg&quot;) center/contain no-repeat"></span><span style="width:22px;height:22px;display:block;background:currentColor;mask:url(&quot;assets/616c0ad2.svg&quot;) center/contain no-repeat"></span></span></div>
+          <div style="height:34px;padding:0 20px;display:flex;align-items:center;gap:8px;flex-shrink:0;border-bottom:1px solid #1E1E26"><span style="width:8px;height:8px;border-radius:8px;background:#5CF7B8"></span><span style="font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#C9C9D2">Sprzedający · sieć testowa</span></div>
+          <div style="height:56px;padding:0 20px;display:flex;align-items:center;gap:10px;flex-shrink:0"><span style="width:26px;height:26px;margin-left:-6px;display:block;background:currentColor;mask:url(&quot;assets/31c3cc79.svg&quot;) center/contain no-repeat"></span><div style="flex:1;font-size:20px;font-weight:600">Transakcja</div></div>
+          <div style="flex:1;min-height:0;overflow:hidden;padding:4px 20px 16px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;gap:12px;align-items:center"><span style="width:64px;height:64px;flex-shrink:0;border-radius:4px;overflow:hidden;position:relative;background:var(--photo-placeholder)"><image-slot id="lp-scr-thumb6" data-res="img_scr_a_jacket_png" shape="rect" placeholder="A" style="position:absolute;inset:0;width:100%;height:100%;color:#9A9AA6;pointer-events:auto"></image-slot></span><div style="display:flex;flex-direction:column;gap:4px;min-width:0"><span style="font-size:16px">Kurtka jeansowa Trucker</span><span style="font-family:var(--font-mono);font-size:15px;font-weight:500">0.35 SOL <span style="font-size:12px;color:#6B6B78">≈ 260 zł</span></span></div></div>
+            <span style="align-self:flex-start;display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:999px;border:1px solid #14F195;color:#14F195;font-size:14px;font-weight:600"><span style="width:7px;height:7px;border-radius:7px;background:currentColor"></span>Zakończone – środki wypłacone</span>
+            <div style="font-size:40px;font-weight:600;letter-spacing:-.03em;line-height:1;font-family:var(--font-mono)">+0.35 SOL</div>
+            <div style="border:1px solid #2A2A35;border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78">Gdzie są pieniądze</span><span style="font-size:15px;color:#14F195">Na Twoim portfelu</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78">Dlaczego teraz</span><span style="font-size:15px">Kupujący potwierdził „Wszystko OK”</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px"><span style="font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78">Kto musiał zatwierdzić</span><span style="font-size:15px">Nikt. Wypłaciła umowa.</span></div>
+            </div>
+            <div style="border-top:1px solid #1E1E26;padding-top:14px;display:flex;flex-direction:column;gap:12px"><div style="display:flex;gap:10px;align-items:center"><span style="width:10px;height:10px;border-radius:10px;background:#14F195"></span><span style="flex:1;font-size:15px">Wystawione</span><span style="font-family:var(--font-mono);font-size:13px;color:#6B6B78">12:02</span></div><div style="display:flex;gap:10px;align-items:center"><span style="width:10px;height:10px;border-radius:10px;background:#14F195"></span><span style="flex:1;font-size:15px">Opłacone</span><span style="font-family:var(--font-mono);font-size:13px;color:#6B6B78">12:05</span></div><div style="display:flex;gap:10px;align-items:center"><span style="width:10px;height:10px;border-radius:10px;background:#14F195"></span><span style="flex:1;font-size:15px">Nadane z nagraniem</span><span style="font-family:var(--font-mono);font-size:13px;color:#6B6B78">12:31</span></div><div style="display:flex;gap:10px;align-items:center"><span style="width:10px;height:10px;border-radius:10px;background:#14F195"></span><span style="flex:1;font-size:15px">Odebrane i potwierdzone</span><span style="font-family:var(--font-mono);font-size:13px;color:#6B6B78">14:20</span></div><div style="display:flex;gap:10px;align-items:center"><span style="width:10px;height:10px;border-radius:10px;background:#14F195"></span><span style="flex:1;font-size:15px">Wypłacone</span><span style="font-family:var(--font-mono);font-size:13px;color:#6B6B78">14:20</span></div></div>
+          </div>
+          <span style="position:absolute;bottom:8px;left:50%;margin-left:-67px;width:134px;height:5px;border-radius:5px;background:#F4F4F6"></span>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ prompts }}" hint-placeholder-val="{{ true }}">
+      <div style="margin-top:clamp(56px,7vw,96px);padding-top:32px;border-top:1px solid #2A2A35;display:flex;flex-direction:column;gap:24px">
+        <div style="display:flex;flex-wrap:wrap;gap:12px 40px;align-items:baseline;justify-content:space-between"><h3 style="margin:0;font-size:26px;font-weight:600;letter-spacing:-.025em">Prompty do zdjęć w ekranach</h3><span style="font-size:14px;color:#9A9AA6">Wygeneruj i przeciągnij obraz na pole z tą samą literą w telefonie.</span></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px">
+          <div data-prompt="" data-format="pionowy 2:3, 1024×1536" style="display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid #2A2A35;border-radius:8px;background:#050507"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span style="font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#FFB547">Zdjęcie A</span><button sc-camel-on-click="{{ copy }}" style="flex-shrink:0;height:32px;padding:0 12px;border-radius:999px;border:1px solid #2A2A35;background:#050507;color:#F4F4F6;font-family:var(--font-sans);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer" style-hover="border-color:#9945FF"><span style="width:14px;height:14px;display:block;background:currentColor;mask:url(&quot;assets/43e051ea.svg&quot;) center/contain no-repeat"></span>Kopiuj prompt</button></div><div style="font-size:18px;font-weight:600;line-height:1.2">Kurtka z ogłoszenia</div><div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#9A9AA6">Ekran 01: tło i miniatura · ekran 05: miniatura</div><div data-prompt-text="" style="font-family:var(--font-mono);font-size:12px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Jasnoniebieska, sprana kurtka jeansowa w stylu vintage, rozpięta i ułożona płasko, widok dokładnie z góry, cała kurtka w kadrze z równym marginesem tła. Lewy mankiet lekko przetarty. Wygląda jak staranne zdjęcie z ogłoszenia w aplikacji z używanymi ubraniami.</div></div>
+          <div data-prompt="" data-format="pionowy 2:3, 1024×1536" style="display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid #2A2A35;border-radius:8px;background:#050507"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span style="font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#FFB547">Zdjęcie B</span><button sc-camel-on-click="{{ copy }}" style="flex-shrink:0;height:32px;padding:0 12px;border-radius:999px;border:1px solid #2A2A35;background:#050507;color:#F4F4F6;font-family:var(--font-sans);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer" style-hover="border-color:#9945FF"><span style="width:14px;height:14px;display:block;background:currentColor;mask:url(&quot;assets/43e051ea.svg&quot;) center/contain no-repeat"></span>Kopiuj prompt</button></div><div style="font-size:18px;font-weight:600;line-height:1.2">Widok kamery przy pakowaniu</div><div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#9A9AA6">Ekran 02: tło kamery</div><div data-prompt-text="" style="font-family:var(--font-mono);font-size:12px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Widok z góry, jak z kamery telefonu, do wnętrza otwartego kartonu. W środku złożona jasnoniebieska kurtka jeansowa, na niej mała biała karta z czarnym kodem QR na środku kadru. Na brzegu kartonu rolka taśmy w ukośne paski. Lekko szerokokątny kadr, jak z nagrania telefonem.</div></div>
+          <div data-prompt="" data-format="poziomy 3:2, 1536×1024" style="display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid #2A2A35;border-radius:8px;background:#050507"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span style="font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#FFB547">Zdjęcie C</span><button sc-camel-on-click="{{ copy }}" style="flex-shrink:0;height:32px;padding:0 12px;border-radius:999px;border:1px solid #2A2A35;background:#050507;color:#F4F4F6;font-family:var(--font-sans);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer" style-hover="border-color:#9945FF"><span style="width:14px;height:14px;display:block;background:currentColor;mask:url(&quot;assets/43e051ea.svg&quot;) center/contain no-repeat"></span>Kopiuj prompt</button></div><div style="font-size:18px;font-weight:600;line-height:1.2">Kadr z nagrania otwarcia</div><div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#9A9AA6">Ekran 03: miniatura nagrania</div><div data-prompt-text="" style="font-family:var(--font-mono);font-size:12px;line-height:1.6;color:#C9C9D2;text-wrap:pretty">Kadr z nagrania telefonem: świeżo otwarta paczka z rozciętą taśmą w ukośne paski. W środku jasnoniebieska kurtka jeansowa z wyraźną ciemną plamą po kawie na przodzie, obok biała karta z kodem QR. Szerokokątny obraz, lekko miękki jak klatka z wideo.</div></div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</section>
+
+<footer data-screen-label="Stopka" style="border-top:1px solid #1E1E26;background:#050507">
+  <div style="max-width:1320px;margin:0 auto;padding:clamp(48px,6vw,80px) clamp(20px,4vw,56px) 32px;display:flex;flex-direction:column;gap:40px">
+    <div style="display:flex;flex-wrap:wrap;gap:32px 64px;justify-content:space-between;align-items:flex-start">
+      <div style="display:flex;flex-direction:column;gap:12px;max-width:420px"><span style="font-weight:700;font-size:28px;letter-spacing:-.03em">Sellsor<span style="color:#14F195">.</span></span><span style="font-size:16px;line-height:1.5;color:#C9C9D2">Używane ubrania od nieznajomych. Pieniądze w umowie, reklamacje według jasnych reguł.</span></div>
+      <nav style="display:flex;flex-direction:column;gap:10px"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#6B6B78">Na stronie</span><a href="#problem" style="font-size:15px;color:#C9C9D2" style-hover="color:#F4F4F6">Problem</a><a href="#rozwiazanie" style="font-size:15px;color:#C9C9D2" style-hover="color:#F4F4F6">Rozwiązanie</a><a href="#jak-dziala" style="font-size:15px;color:#C9C9D2" style-hover="color:#F4F4F6">Jak to działa</a></nav>
+      <div style="display:flex;flex-direction:column;gap:10px"><span style="font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#6B6B78">Projekt</span><a href="https://github.com/IhnatVyhuliar/hackyeah" target="_blank" rel="noreferrer" style="font-size:15px;color:#C9C9D2" style-hover="color:#F4F4F6">Repozytorium ↗</a><span style="font-size:15px;color:#C9C9D2">HackYeah 2026</span><span style="font-size:15px;color:#C9C9D2">Superteam Poland · Finanse bez pośrednika</span></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-between;padding-top:20px;border-top:1px solid #1E1E26"><span style="font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78">Prototyp · sieć testowa Solana (devnet)</span><span style="font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6B6B78">© 2026 Sellsor</span></div>
+  </div>
+</footer>
+
+<sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:999px;background:#14141A;border:1px solid #2A2A35;color:#F4F4F6;font-size:15px;box-shadow:0 12px 40px rgba(0,0,0,.5);white-space:nowrap"><span style="width:16px;height:16px;display:block;color:#14F195;background:currentColor;mask:url(&quot;assets/31a38361.svg&quot;) center/contain no-repeat"></span>Prompt skopiowany razem ze stylem i formatem</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;showPrompts&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;showSources&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { filled: {}, toast: false };
+  STYLE = "Styl: studyjne zdjęcie produktowe, jednolite gładkie tło w głębokim grafitowym odcieniu (#0B0B0F), miękkie rozproszone światło z dużego softboxa z lewej, delikatny cień pod przedmiotami, ostre detale tkanin i tektury, realistyczne kolory, minimalistyczna kompozycja z dużą ilością pustego tła. Bez ludzi poza dłońmi, bez tekstu, bez czytelnych ekranów, bez logo, bez znaków wodnych.";
+  componentDidMount() {
+    const R = window.__resources || {};
+    const apply = () => {
+      document.querySelectorAll("image-slot[data-res]").forEach(el => { const k = el.getAttribute("data-res"); const u = R[k]; if (u && !el.hasAttribute("data-res-done")) { el.setAttribute("data-res-done", ""); el.setAttribute("src", u); } });
+      document.querySelectorAll('[style*="lucide-static"]').forEach(el => { const s = el.getAttribute("style"); const m = s.match(/lucide-static@0\.469\.0\/icons\/([a-z0-9-]+)\.svg/); if (!m) return; const u = this._ic && this._ic["ic_" + m[1].replace(/-/g, "_")]; if (!u) return; el.style.mask = "url(\"" + u + "\") center/contain no-repeat"; el.style.webkitMask = "url(\"" + u + "\") center/contain no-repeat"; });
+    };
+    this._ic = {};
+    Promise.all(Object.keys(R).filter(k => k.indexOf("ic_") === 0).map(k => fetch(R[k]).then(r => r.text()).then(t => { this._ic[k] = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(t); }).catch(() => {}))).then(() => apply());
+    apply(); let q = 0; this._resMo = new MutationObserver(() => { if (q) return; q = requestAnimationFrame(() => { q = 0; apply(); }); }); this._resMo.observe(document.body, { childList: true, subtree: true });
+    this._sync = () => {
+      const next = {};
+      document.querySelectorAll("image-slot[id]").forEach(el => { if (el.hasAttribute("data-filled") || el.getAttribute("src")) next[el.id] = true; });
+      const a = Object.keys(next).sort().join("|");
+      const b = Object.keys(this.state.filled).sort().join("|");
+      if (a !== b) this.setState({ filled: next });
+    };
+    this._mo = new MutationObserver(this._sync);
+    this._mo.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["data-filled"] });
+    this._sync();
+    this._late = setTimeout(this._sync, 1500);
+  }
+  componentWillUnmount() { if (this._mo) this._mo.disconnect(); clearTimeout(this._t); clearTimeout(this._late); }
+  copy = (e) => {
+    const box = e.currentTarget.closest("[data-prompt]");
+    if (!box) return;
+    const el = box.querySelector("[data-prompt-text]");
+    const scene = (el ? el.textContent : "").replace(/\s+/g, " ").trim();
+    const text = scene + " " + this.STYLE + " Format: " + box.getAttribute("data-format") + ".";
+    const done = () => { clearTimeout(this._t); this.setState({ toast: true }); this._t = setTimeout(() => this.setState({ toast: false }), 1800); };
+    const fallback = () => {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch (err) {}
+      ta.remove(); done();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+  };
+  renderVals() {
+    const prompts = this.props.showPrompts ?? false;
+    const sources = this.props.showSources ?? true;
+    const show = {};
+    ["hero","pFraud","pWait","pFees","solPack","solPair","s1","s2","s3","s4","s5"].forEach(id => { show[id] = !this.state.filled["lp-" + id]; });
+    const buyer = (this.state.role || "buyer") === "buyer";
+    return { show, prompts, sources, copy: this.copy, toast: this.state.toast,
+      isBuyer: buyer, isSeller: !buyer,
+      setBuyer: () => this.setState({ role: "buyer" }), setSeller: () => this.setState({ role: "seller" }),
+      buyerBg: buyer ? "#9945FF" : "transparent", buyerFg: buyer ? "#FFFFFF" : "#C9C9D2",
+      sellerBg: buyer ? "transparent" : "#14F195", sellerFg: buyer ? "#C9C9D2" : "#050507",
+      stepTitle: buyer ? "Tylko 3 kroki." : "Tylko 2 kroki." };
+  }
+}
+</script>
+
+
+
+</body></html>
