@@ -18,3 +18,6 @@ dist/
 spikes/
 # landing
 landing/.build/
+# expo prebuild output (generated, not committed)
+app/android/
+app/ios/

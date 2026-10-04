@@ -10,12 +10,21 @@
       "supportsTablet": false
     },
     "android": {
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "pl.unboxproof.sellsor"
     },
     "plugins": [
       "expo-font",
       "expo-status-bar",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Aparat nagrywa pakowanie i otwarcie paczki oraz odczytuje kod z karty.",
+          "microphonePermission": "Android wymaga zgody na mikrofon przy nagrywaniu wideo. Nagrania są bez dźwięku.",
+          "recordAudioAndroid": true
+        }
+      ]
     ]
   }
 }
