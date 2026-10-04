@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Pressable, TextInput } from 'react-native';
-import { Txt, Label, Icon, Photo, Btn, Notice, Header, Body, Footer, Chip, Field, Row, ev } from '../ui';
+import { View, Pressable, TextInput, Image, StyleSheet } from 'react-native';
+import { Txt, Label, Icon, Photo, Btn, Notice, Header, Body, Footer, Chip, Field, Row, ev, FILL } from '../ui';
 import { col, F, PH, LINE, LINE_STRONG } from '../theme';
 
 export function Brief({ p }: any) {
@@ -69,6 +69,7 @@ export function Camera({ p }: any) {
   const C = p.C;
   return (
     <View style={{ flex: 1, backgroundColor: '#0E0E12' }}>
+      {C.bg ? <><Image source={C.bg} resizeMode="cover" style={FILL} /><View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} /></> : null}
       {C.isRec ? <View style={{ height: 4, backgroundColor: 'rgba(255,255,255,0.18)' }}><View style={{ height: 4, width: C.limitPct, backgroundColor: C.limitColor }} /></View> : null}
       <View style={{ paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <Pressable onPress={C.cancel} style={{ width: 44, height: 44, borderRadius: 44, backgroundColor: 'rgba(5,5,7,0.72)', alignItems: 'center', justifyContent: 'center' }}><Icon name="x" size={22} color="#FFFFFF" /></Pressable>
@@ -106,7 +107,7 @@ export function Decide({ p }: any) {
     <View style={{ flex: 1 }}>
       <Header title="Jak przesyłka?" />
       <Body gap={14}>
-        <Photo h={170} label={'nagranie otwarcia · ' + X.dur} />
+        <Photo h={170} label={'nagranie otwarcia · ' + X.dur} src={X.img} />
         <Row><Icon name="circle-check" size={18} color="var(--secured)" /><Txt s={15} c="var(--fg-2)">Kod z karty w paczce potwierdzony</Txt></Row>
         <Txt s={26} w={600} ls={-0.5} lh={1.1}>Zgadza się z opisem?</Txt>
         <Txt s={15} c="var(--fg-2)" lh={1.45}>Zdecyduj teraz. „Wszystko OK” przekazuje {X.priceText} SOL (≈ {X.zl}) sprzedającemu – tego nie da się cofnąć.</Txt>

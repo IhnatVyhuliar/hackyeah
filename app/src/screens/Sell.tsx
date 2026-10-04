@@ -10,7 +10,7 @@ export function Sell({ p }: any) {
       <View style={{ height: 56, paddingHorizontal: 20, justifyContent: 'center' }}><Txt s={20} w={600}>Nowe ogłoszenie</Txt></View>
       <Body>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {[0, 1, 2].map(i => <Photo key={i} h={88} style={{ flex: 1 }} />)}
+          {[0, 1, 2].map(i => <Photo key={i} h={88} src={p.formPhotos[i]} style={{ flex: 1 }} />)}
           <View style={{ flex: 1, height: 88, borderRadius: 4, borderWidth: 1, borderStyle: 'dashed', borderColor: col('var(--fg-3)'), alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="camera" size={22} color="var(--fg-3)" />
           </View>

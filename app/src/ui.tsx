@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View, Pressable, Linking, ScrollView, TextInput } from 'react-native';
+import { Text, View, Pressable, Linking, ScrollView, TextInput, Image, StyleSheet } from 'react-native';
 import * as Lucide from 'lucide-react-native';
 import { col, F, PH, LINE, LINE_STRONG } from './theme';
 
@@ -61,9 +61,12 @@ export function Notice({ tone = 'var(--line-strong)', icon, iconColor, title, te
     </View>
   );
 }
-export const Photo = ({ h, w, label, style }: any) => (
+// Explicit 100% size: react-native-web otherwise sizes the image to the bundled asset's pixel size.
+export const FILL = [StyleSheet.absoluteFill, { width: '100%', height: '100%' }] as any;
+export const Photo = ({ h, w, label, src, style }: any) => (
   <View style={[{ height: h, width: w, borderRadius: 4, backgroundColor: '#17171D', borderWidth: 1, borderColor: '#1B1B22', overflow: 'hidden' }, style]}>
-    {label ? <Txt mono s={11} up ls={0.4} c="var(--ink-400)" style={{ position: 'absolute', left: 10, bottom: 10 }}>{label}</Txt> : null}
+    {src ? <Image source={src} resizeMode="cover" style={FILL} /> : null}
+    {label ? <Txt mono s={11} up ls={0.4} c={src ? '#F4F4F6' : 'var(--ink-400)'} style={[{ position: 'absolute', left: 10, bottom: 10 }, src && { backgroundColor: 'rgba(5,5,7,0.72)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4 }]}>{label}</Txt> : null}
   </View>
 );
 export function Header({ title, onBack, right }: any) {

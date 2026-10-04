@@ -32,7 +32,7 @@ export function Deals({ p }: any) {
         {p.rowsLoading ? <><Label>Wczytuję umowy z sieci…</Label><Skeleton /><Skeleton /></> : null}
         {p.rows.map((r: any) => (
           <Pressable key={r.id} onPress={r.open} style={{ flexDirection: 'row', gap: 12, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: LINE, alignItems: 'center' }}>
-            <Photo h={60} w={60} />
+            <Photo h={60} w={60} src={r.img} />
             <View style={{ flex: 1, gap: 6 }}>
               <Txt s={16} numberOfLines={1}>{r.title}</Txt>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

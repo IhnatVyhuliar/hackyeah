@@ -2,6 +2,7 @@
 // Demo engine: state machine mock, view models, timers. Ported 1:1 from the Sellsor prototype.
 // Replace tx() / oracle() / fetchRate() with app/src/solana, oracle events and a real price source.
 import React from 'react';
+import { DEAL_IMG, NAME_IMG, SELL_IMG, PARCEL_CLOSED, SCAN_CARD, unboxImg, packingImg } from './demo/images';
 export const Ctx = React.createContext(null);
 export const useP = () => React.useContext(Ctx).phones[0];
 const TO = { Paid: 600, Shipped: 3600, Disputed: 600, ReturnRequested: 600, Returning: 600 };
@@ -61,7 +62,7 @@ function genItems() {
     while (flaws.length < nf) { const f = pick(FLAW_POOL); if (!flaws.includes(f)) flaws.push(f); }
     const price = Math.round((0.05 + Math.pow(r(), 1.6) * 1.15) * 100) / 100;
     const seller = r() < 0.1 ? 'kuba' : pick(['marta', 'ania']);
-    out.push({ id: 'g' + i, no: String(100 + i).padStart(4, '0'), title: name + ' ' + brand, brand, size, cond, cat, price, desc: name + ' marki ' + brand + ', rozmiar ' + size + '. Stan: ' + cond.toLowerCase() + '.', flaws, seller, status: 'Listed', changedAt: -(1800 + i * 1500 + Math.floor(r() * 900)) });
+    out.push({ id: 'g' + i, no: String(100 + i).padStart(4, '0'), title: name + ' ' + brand, img: NAME_IMG[name], brand, size, cond, cat, price, desc: name + ' marki ' + brand + ', rozmiar ' + size + '. Stan: ' + cond.toLowerCase() + '.', flaws, seller, status: 'Listed', changedAt: -(1800 + i * 1500 + Math.floor(r() * 900)) });
   }
   return out;
 }
@@ -114,7 +115,7 @@ export class AppProvider extends React.Component<any, any> {
       mk({ id: 'd9', no: '0003', title: 'Kurtka Nike ACG', brand: 'Nike', size: 'L', cond: 'Bardzo dobry', price: 0.54, fiat: 401, desc: 'Kurtka przeciwdeszczowa.', seller: 'kuba', buyer: 'ania', status: 'Completed', changedAt: -300000, tracking: '6200 7781 0042 33', packHash: rnd(44), qrCommit: rnd(44), events: [ev('Listed', -400000), ev('Paid', -350000), ev('Shipped', -330000), ev('Completed', -300000, 'Odebrane – wszystko OK')] }),
     ];
     const CAT0 = { d1: 'Kurtki', d2: 'Buty', d3: 'Koszule', d8: 'Sukienki', d4: 'Kurtki', d5: 'Swetry', d6: 'Bluzy', d9: 'Kurtki' };
-    deals.forEach(d => { d.cat = CAT0[d.id]; });
+    deals.forEach(d => { d.cat = CAT0[d.id]; d.img = DEAL_IMG[d.id]; });
     genItems().forEach(o => deals.push(mk({ ...o, events: [ev('Listed', o.changedAt)] })));
     const onb = this.props.onboarding ?? true;
     return {
@@ -236,7 +237,7 @@ export class AppProvider extends React.Component<any, any> {
   publish(k) {
     const f = this.state.phones[k].form, price = parseFloat(f.price.replace(',', '.'));
     const id = 'n' + Date.now(), no = String(15 + this.state.deals.length).padStart(4, '0');
-    this.tx(k, { title: 'Zapisujemy ogłoszenie…', mutate: (s, sig, now) => ({ deals: [{ id, no, title: f.title, brand: f.brand || '—', size: f.size || '—', cond: ({ 'Nowy': 'Nowy z metką', 'B. dobry': 'Bardzo dobry' })[f.cond] || f.cond, cat: 'Inne', price, desc: f.title + '.', flaws: f.flaws, seller: k, buyer: null, status: 'Listed', changedAt: now, listingHash: rnd(44), pda: rnd(44), hidden: false, events: [{ st: 'Listed', label: '', at: now, sig }] }, ...s.deals] }),
+    this.tx(k, { title: 'Zapisujemy ogłoszenie…', mutate: (s, sig, now) => ({ deals: [{ id, no, title: f.title, img: SELL_IMG[0], brand: f.brand || '—', size: f.size || '—', cond: ({ 'Nowy': 'Nowy z metką', 'B. dobry': 'Bardzo dobry' })[f.cond] || f.cond, cat: 'Inne', price, desc: f.title + '.', flaws: f.flaws, seller: k, buyer: null, status: 'Listed', changedAt: now, listingHash: rnd(44), pda: rnd(44), hidden: false, events: [{ st: 'Listed', label: '', at: now, sig }] }, ...s.deals] }),
       ok: ['Ogłoszenie wystawione', 'Opis i lista wad są zapisane w umowie. Po zakupie nie da się ich zmienić.'], after: () => this.setPh(k, { tab: 'deals', dealsTab: 'Sprzedaże', stack: [{ screen: 'deal', id }] }) });
   }
   cancel(k, id) { this.tx(k, { title: 'Anulujemy ogłoszenie…', guard: { id, status: 'Listed' }, mutate: (s, sig, now) => this.transition(s, id, 'Cancelled', {}, sig, now), ok: ['Ogłoszenie anulowane', 'Nikt nie zapłacił, nic nie zostało zablokowane.'] }); }
@@ -343,7 +344,7 @@ export class AppProvider extends React.Component<any, any> {
     const lastSig = d.events[d.events.length - 1].sig;
     const mineB = benef === me;
     return {
-      id: d.id, no: d.no, title: d.title, priceText, zl: this.zl(d.price), statusLabel: STATUS[d.status][0], statusColor: STATUS[d.status][1],
+      id: d.id, no: d.no, title: d.title, img: d.img, priceText, zl: this.zl(d.price), statusLabel: STATUS[d.status][0], statusColor: STATUS[d.status][1],
       parties: d.buyer ? (iS ? 'Kupuje: ' + bN : 'Sprzedaje: ' + sN) : 'Sprzedaje: ' + sN,
       hint, hasHint: !!hint, isActive: ESCROW.includes(d.status) || d.status === 'Listed',
       funds: d.status === 'Listed' ? 'Nikt jeszcze nie zapłacił' : 'Zabezpieczone w umowie · ' + priceText + ' SOL (≈ ' + this.zl(d.price) + ')', fundsColor: d.status === 'Listed' ? 'var(--fg-2)' : 'var(--secured)', who, after,
@@ -383,7 +384,7 @@ export class AppProvider extends React.Component<any, any> {
       const tog = (arr, x) => (arr.includes(x) ? arr.filter(y => y !== x) : [...arr, x]);
       const list = s.deals.filter(d => d.status === 'Listed' && d.seller !== k && (F.cat === 'Wszystko' || d.cat === F.cat) && (!q || norm(d.title + ' ' + d.brand + ' ' + (d.cat || '')).includes(q)) && (!F.sizes.length || F.sizes.includes(d.size)) && (!F.conds.length || F.conds.includes(d.cond)) && (F.max >= PRICE_MAX || d.price <= F.max + 1e-9) && (!F.noFlaws || !d.flaws.length));
       list.sort((a, b) => (F.sort === 'cheap' ? a.price - b.price : F.sort === 'exp' ? b.price - a.price : b.changedAt - a.changedAt));
-      v.feed = list.map(d => ({ title: d.title, priceText: d.price.toFixed(2), zl: this.zl(d.price), meta: d.size + ' · ' + d.cond, cat: d.cat || 'foto', open: () => this.go(k, 'listing', d.id) }));
+      v.feed = list.map(d => ({ title: d.title, img: d.img, priceText: d.price.toFixed(2), zl: this.zl(d.price), meta: d.size + ' · ' + d.cond, cat: d.cat || 'foto', open: () => this.go(k, 'listing', d.id) }));
       v.feedEmpty = list.length === 0; v.resultsLabel = list.length + ' ' + plural(list.length); v.sortLabel = SORTS.find(x => x[0] === F.sort)[1];
       v.q = F.q; v.hasQ = !!F.q; v.setQ = e => { const val = e.target.value; setF({ q: val }); }; v.clearQ = () => setF({ q: '' });
       const chip = (on, pick, label) => ({ label, pick, bg: on ? 'var(--fg-1)' : 'transparent', fg: on ? 'var(--ink-950)' : 'var(--fg-2)', border: on ? 'var(--fg-1)' : 'var(--line-strong)' });
@@ -404,7 +405,7 @@ export class AppProvider extends React.Component<any, any> {
     if (top && top.id) {
       const d = this.deal(top.id);
       if (d) {
-        v.L = { title: d.title, brandLine: d.brand + ' · ' + d.size + ' · ' + d.cond, desc: d.desc, flaws: d.flaws, flawsCount: d.flaws.length, noFlaws: d.flaws.length === 0, priceText: d.price.toFixed(2), zl: this.zl(d.price),
+        v.L = { title: d.title, img: d.img, brandLine: d.brand + ' · ' + d.size + ' · ' + d.cond, desc: d.desc, flaws: d.flaws, flawsCount: d.flaws.length, noFlaws: d.flaws.length === 0, priceText: d.price.toFixed(2), zl: this.zl(d.price),
           sellerLine: USERS[d.seller].name + ' · ' + short(USERS[d.seller].addr), isOwn: d.seller === k, notOwn: d.seller !== k, shipBy: hhmm(now + TO.Paid), short: bal < d.price, buyOpacity: bal < d.price ? 0.4 : 1 };
         v.D = this.dv(d, k);
         v.openBuy = () => this.setPh(k, { sheet: 'buy', rulesOpen: false });
@@ -426,7 +427,7 @@ export class AppProvider extends React.Component<any, any> {
         }
         if (scr === 'decide' || P.sheet === 'ok') {
           const dc = P.decide;
-          v.X = { dur: dc.dur, priceText: d.price.toFixed(2), zl: this.zl(d.price), text: dc.text, cant: !dc.cat, opacity: dc.cat ? 1 : 0.4,
+          v.X = { dur: dc.dur, img: unboxImg(d.id), priceText: d.price.toFixed(2), zl: this.zl(d.price), text: dc.text, cant: !dc.cat, opacity: dc.cat ? 1 : 0.4,
             cats: CATS.map(c => ({ label: c, bg: dc.cat === c ? 'var(--amber-tint)' : 'transparent', fg: dc.cat === c ? 'var(--warning)' : 'var(--fg-2)', border: dc.cat === c ? 'var(--warning)' : 'var(--line-strong)', pick: () => this.setPh(k, Q => ({ decide: { ...Q.decide, cat: Q.decide.cat === c ? null : c } })) })),
             setText: e => { const val = e.target.value; this.setPh(k, Q => ({ decide: { ...Q.decide, text: val } })); },
             accept: () => this.setPh(k, { sheet: 'ok' }), acceptConfirm: () => this.accept(k, d.id), complain: () => { if (this.state.phones[k].decide.cat) this.complain(k, d.id); } };
@@ -453,25 +454,25 @@ export class AppProvider extends React.Component<any, any> {
       if (m === 'unboxing') {
         const fb = this.fallbackQr(), qr = !fb && el >= 4, can = el >= 4;
         v.C = { isRec: true, isScan: false, tag: '720p', time: '00:' + pad(Math.min(el, 119)), limitPct: pct, limitColor: el > 100 ? '#FF6B6B' : '#fff', frame: qr ? '#14F195' : 'rgba(255,255,255,.45)', found: qr, notFound: !qr, scanCta: '',
-          status: qr ? 'Kod z karty wykryty' : fb && can ? 'Nagrywam – pokaż całe otwarcie' : 'Zacznij od zamkniętej paczki', hint: fb ? 'Kartę z kodem zeskanujesz zaraz po nagraniu. Nagrywaj bez przerw.' : 'Nagrywaj bez przerw, aż całe ubranie będzie widoczne.', hasChecks: false, checks: [], opacity: can ? 1 : 0.4, stop: () => { if (can) this.stopRec(k); }, cancel: () => this.back(k) };
+          bg: can ? unboxImg(P.rec.id) : PARCEL_CLOSED, status: qr ? 'Kod z karty wykryty' : fb && can ? 'Nagrywam – pokaż całe otwarcie' : 'Zacznij od zamkniętej paczki', hint: fb ? 'Kartę z kodem zeskanujesz zaraz po nagraniu. Nagrywaj bez przerw.' : 'Nagrywaj bez przerw, aż całe ubranie będzie widoczne.', hasChecks: false, checks: [], opacity: can ? 1 : 0.4, stop: () => { if (can) this.stopRec(k); }, cancel: () => this.back(k) };
       } else {
         const labels = ['Ubranie widoczne', m === 'return' ? 'Karta zwrotu w środku' : 'Karta z kodem w środku', 'Paczka zaklejona', 'Etykieta przewoźnika'];
         const checks = labels.map((l, i) => ({ label: l, color: el >= (i + 1) * 2 ? '#14F195' : 'rgba(255,255,255,.5)' }));
         const all = el >= 8;
         v.C = { isRec: true, isScan: false, tag: '720p', time: '00:' + pad(Math.min(el, 119)), limitPct: pct, limitColor: el > 100 ? '#FF6B6B' : '#fff', frame: 'rgba(255,255,255,.45)', found: false, notFound: true, scanCta: '',
-          status: all ? 'Wszystko widać – możesz zakończyć' : 'Pokaż ubranie, kartę, zaklejenie i etykietę', hint: 'Najpierw nagranie trafi do magazynu plików, potem jego odcisk do umowy.', hasChecks: true, checks, opacity: all ? 1 : 0.4, stop: () => { if (all) this.stopRec(k); }, cancel: () => this.back(k) };
+          bg: el >= 6 ? PARCEL_CLOSED : packingImg(P.rec.id, m === 'return'), status: all ? 'Wszystko widać – możesz zakończyć' : 'Pokaż ubranie, kartę, zaklejenie i etykietę', hint: 'Najpierw nagranie trafi do magazynu plików, potem jego odcisk do umowy.', hasChecks: true, checks, opacity: all ? 1 : 0.4, stop: () => { if (all) this.stopRec(k); }, cancel: () => this.back(k) };
       }
     }
     if (scr === 'scan' && P.scan) {
       const el = (Date.now() - P.scan.start) / 1000, found = el >= 2.5, d = this.deal(P.scan.id), unbox = P.scan.mode === 'unbox';
-      v.C = { isRec: false, isScan: true, tag: 'skaner', time: '', limitPct: '0%', limitColor: '#fff', frame: found ? '#14F195' : 'rgba(255,255,255,.45)', found, notFound: !found, scanCta: unbox ? 'Dalej' : 'Potwierdź odbiór zwrotu',
+      v.C = { isRec: false, isScan: true, bg: SCAN_CARD, tag: 'skaner', time: '', limitPct: '0%', limitColor: '#fff', frame: found ? '#14F195' : 'rgba(255,255,255,.45)', found, notFound: !found, scanCta: unbox ? 'Dalej' : 'Potwierdź odbiór zwrotu',
         status: found ? (unbox ? 'Kod z karty zgodny z umową' : 'Karta zwrotu zgodna z umową') : (unbox ? 'Szukam karty z paczki…' : 'Szukam karty zwrotu…'),
         hint: unbox ? 'Nagranie otwarcia jest zapisane na telefonie. Zeskanuj kartę, która była w paczce.' : 'Zeskanuj kartę z odebranej paczki. Po potwierdzeniu ' + d.price.toFixed(2) + ' SOL wróci do kupującego.', hasChecks: false, checks: [], opacity: found ? 1 : 0.4,
         stop: () => { if (!found) return; if (unbox) this.setPh(k, Q => ({ scan: null, stack: [...Q.stack.slice(0, -1), { screen: 'decide', id: d.id }] })); else this.confirmReturn(k, d.id); }, cancel: () => this.back(k) };
     }
     if (scr === 'sell') {
       const f = P.form, price = parseFloat((f.price || '').replace(',', '.')), ok = f.title.trim().length > 2 && price > 0;
-      v.form = f; v.formZl = price > 0 ? this.zl(price) : '0,00 zł'; v.cantPublish = !ok; v.publishOpacity = ok ? 1 : 0.4;
+      v.form = f; v.formPhotos = SELL_IMG; v.formZl = price > 0 ? this.zl(price) : '0,00 zł'; v.cantPublish = !ok; v.publishOpacity = ok ? 1 : 0.4;
       v.conds = CONDS.map(c => ({ label: c, bg: c === f.cond ? 'var(--fg-1)' : 'transparent', fg: c === f.cond ? 'var(--ink-950)' : 'var(--fg-2)', pick: () => this.setPh(k, Q => ({ form: { ...Q.form, cond: c } })) }));
       v.formFlaws = f.flaws.map((t, i) => ({ text: t, remove: () => this.setPh(k, Q => ({ form: { ...Q.form, flaws: Q.form.flaws.filter((_, j) => j !== i) } })) }));
       v.fTitle = this.setForm(k, 'title'); v.fBrand = this.setForm(k, 'brand'); v.fSize = this.setForm(k, 'size'); v.fPrice = this.setForm(k, 'price'); v.fFlaw = this.setForm(k, 'flawDraft');

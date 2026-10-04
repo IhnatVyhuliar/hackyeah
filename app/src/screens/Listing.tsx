@@ -8,7 +8,7 @@ export function Listing({ p }: any) {
   return (
     <View style={{ flex: 1 }}>
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
-        <Photo h={380} label="zdjęcie 1/4" style={{ borderRadius: 0, borderWidth: 0 }} />
+        <Photo h={380} label="zdjęcie 1/4" src={L.img} style={{ borderRadius: 0, borderWidth: 0 }} />
       </View>
       <View style={{ paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row' }}>
         <Pressable onPress={p.back} style={{ width: 44, height: 44, borderRadius: 44, backgroundColor: col('var(--scrim)'), borderWidth: 1, borderColor: LINE, alignItems: 'center', justifyContent: 'center' }}>

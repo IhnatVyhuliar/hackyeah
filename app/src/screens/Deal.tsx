@@ -44,7 +44,7 @@ export function Deal({ p }: any) {
       <Header title="Transakcja" onBack={p.back} right={<Label>#{D.no}</Label>} />
       <Body>
         <Row gap={12}>
-          <Photo h={64} w={64} />
+          <Photo h={64} w={64} src={D.img} />
           <View style={{ flex: 1, gap: 4 }}>
             <Txt s={16} w={500}>{D.title}</Txt>
             <Txt mono s={15} w={500}>{D.priceText} SOL <Txt mono s={13} c="var(--fg-3)">≈ {D.zl}</Txt></Txt>

@@ -6,7 +6,7 @@ import { col, F, PH, LINE, LINE_STRONG } from '../theme';
 function Card({ l }: any) {
   return (
     <Pressable onPress={l.open} style={{ width: '48%' }}>
-      <Photo h={178} label={l.cat} />
+      <Photo h={178} label={l.cat} src={l.img} />
       <View style={{ paddingTop: 10, gap: 3 }}>
         <Txt s={15} numberOfLines={1}>{l.title}</Txt>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
