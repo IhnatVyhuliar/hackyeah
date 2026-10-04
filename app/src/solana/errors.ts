@@ -1,6 +1,9 @@
 // Anchor / web3 errors → EscrowError with Polish copy (no "transaction", "signature", "lamport").
 import { EscrowError, isEscrowError, type EscrowErrorCode } from '@unbox/shared';
 
+// The deployed program is older than the app (e.g. dispute and return not upgraded on devnet yet).
+const OUTDATED = 'Umowa w sieci nie obsługuje jeszcze tej czynności (program wymaga aktualizacji). Nic nie zostało pobrane.';
+
 const PROGRAM: Record<string, [EscrowErrorCode, string]> = {
   InvalidStatus: ['InvalidStatus', 'Ktoś wykonał ruch w tej umowie chwilę wcześniej. Pokazujemy aktualny stan.'],
   Unauthorized: ['Unauthorized', 'Tę czynność może wykonać tylko druga strona umowy.'],
@@ -13,6 +16,8 @@ const PROGRAM: Record<string, [EscrowErrorCode, string]> = {
   StringTooLong: ['Rejected', 'Numer przesyłki musi mieć od 1 do 32 znaków.'],
   EmptyText: ['Rejected', 'Numer przesyłki musi mieć od 1 do 32 znaków.'],
   EmptyHash: ['Rejected', 'Brakuje nagrania albo jego odcisku. Nagraj film jeszcze raz.'],
+  NotImplemented: ['Rejected', OUTDATED],
+  InstructionFallbackNotFound: ['Rejected', OUTDATED],
 };
 
 export function toEscrowError(e: unknown): EscrowError {
@@ -26,6 +31,7 @@ export function toEscrowError(e: unknown): EscrowError {
     return err;
   }
   const text = `${x?.message ?? ''} ${(x?.logs ?? []).join(' ')}`;
+  if (/InstructionFallbackNotFound|Error Code: NotImplemented/.test(text)) return new EscrowError('Rejected', OUTDATED);
   if (/insufficient lamports|no record of a prior credit|insufficient funds/i.test(text)) {
     return new EscrowError('InsufficientFunds', 'Za mało SOL na tę operację (cena i opłata sieci). Doładuj testowe SOL.');
   }

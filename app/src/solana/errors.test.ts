@@ -28,3 +28,12 @@ test('no raw English leaks into messages', () => {
   assert.doesNotMatch(unknown.message, /SomethingNew/);
   assert.equal(unknown.code, 'Rejected');
 });
+
+test('an instruction the deployed program does not have yet says so, instead of a generic rejection', () => {
+  for (const e of [anchorErr('NotImplemented'), anchorErr('InstructionFallbackNotFound'),
+    { message: 'Simulation failed', logs: ['Program log: AnchorError occurred. Error Code: InstructionFallbackNotFound. Error Number: 101.'] }]) {
+    const x = toEscrowError(e);
+    assert.equal(x.code, 'Rejected');
+    assert.match(x.message, /nie obsługuje jeszcze/);
+  }
+});
