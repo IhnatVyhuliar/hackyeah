@@ -15,7 +15,7 @@ moves the deal to `ReturnRequested` on its own.
 | `gemini.ts` | Gemini Interactions API, videos via Files API, structured output; the model only fills report fields |
 | `resolve.ts` | builds `report.json`, uploads it (immutable), sends `resolve_dispute(verdict, sha256(report.json))` |
 | `chain.ts` | Anchor client; only `resolveDispute` and `settleExpired` exist here |
-| `storage.ts` | Supabase Storage REST |
+| `storage.ts` | server/ `/media` (files addressed by sha256) + report upload as the oracle account |
 | `fixture.ts` | runs the model + `decide()` on local files, no chain |
 | `../prompts/v1.md` | versioned prompt; changes go to a new `v2.md` |
 
@@ -25,7 +25,7 @@ The model never picks the winner. Anyone can download `deals/<deal>/report.json`
 ## Run
 
 ```bash
-cp .env.example .env          # fill GEMINI_API_KEY, SUPABASE_*, RPC_URL
+cp .env.example .env          # fill GEMINI_API_KEY, API_URL, ORACLE_API_PASSWORD, RPC_URL
 pnpm install
 pnpm test                     # decide() + evidence table tests
 pnpm fixture fixtures/stain --runs 3

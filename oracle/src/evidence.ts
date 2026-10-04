@@ -10,7 +10,7 @@ export interface ListingMetadata {
   size: string;
   condition: string;
   defects: string[];
-  photos: { path: string; sha256: string }[];
+  photos: { url: string; sha256: string }[];
 }
 
 // complaint.json written by the buyer app (Complaint).
@@ -18,7 +18,7 @@ export interface Complaint {
   v: 1;
   category: string;
   description: string;
-  created_at: string;
+  created_at: number; // Unix seconds
 }
 
 // Hashes as committed on-chain in the Deal account, hex-encoded.
@@ -42,15 +42,8 @@ export interface EvidenceBundle {
 }
 
 // Returns file bytes or null when the file does not exist / cannot be downloaded.
-// `ref` is either a full URL or a storage path inside the bucket.
+// `ref` is either a full URL or a sha256 (served from server/ /media).
 export type FetchBytes = (ref: string) => Promise<Uint8Array | null>;
-
-export const dealPaths = (deal: string) => ({
-  packing: `deals/${deal}/packing.mp4`,
-  unboxing: `deals/${deal}/unboxing.mp4`,
-  complaint: `deals/${deal}/complaint.json`,
-  report: `deals/${deal}/report.json`,
-});
 
 function parseJson<T>(bytes: Uint8Array | null): T | null {
   if (!bytes) return null;
@@ -66,7 +59,7 @@ function isMetadata(m: unknown): m is ListingMetadata {
   return (
     typeof x === "object" && x !== null &&
     Array.isArray(x.defects) && Array.isArray(x.photos) &&
-    x.photos.every((p) => typeof p?.path === "string" && typeof p?.sha256 === "string")
+    x.photos.every((p) => typeof p?.url === "string" && typeof p?.sha256 === "string")
   );
 }
 
@@ -85,7 +78,6 @@ export async function collectEvidence(refs: DealRefs, fetchBytes: FetchBytes): P
     items.push({ path, author, expected_sha256: expected.toLowerCase(), actual_sha256: actual, ok: actual === expected.toLowerCase() });
     return actual === expected.toLowerCase() ? bytes : null;
   };
-  const p = dealPaths(refs.deal);
 
   const metadataBytes = await check(refs.metadataUri, "seller", refs.listingHash);
   const metadataRaw = parseJson<unknown>(metadataBytes);
@@ -93,12 +85,12 @@ export async function collectEvidence(refs: DealRefs, fetchBytes: FetchBytes): P
   // Photo hashes live inside metadata.json, so listing_hash covers them too.
   const photos: EvidenceBundle["photos"] = [];
   for (const photo of metadata?.photos ?? []) {
-    const bytes = await check(photo.path, "seller", photo.sha256);
-    if (bytes) photos.push({ path: photo.path, bytes });
+    const bytes = await check(photo.url, "seller", photo.sha256);
+    if (bytes) photos.push({ path: photo.url, bytes });
   }
-  const packing = await check(p.packing, "seller", refs.packingVideoHash);
-  const unboxing = await check(p.unboxing, "buyer", refs.unboxingVideoHash);
-  const complaintBytes = await check(p.complaint, "buyer", refs.complaintHash);
+  const packing = await check(refs.packingVideoHash.toLowerCase(), "seller", refs.packingVideoHash);
+  const unboxing = await check(refs.unboxingVideoHash.toLowerCase(), "buyer", refs.unboxingVideoHash);
+  const complaintBytes = await check(refs.complaintHash.toLowerCase(), "buyer", refs.complaintHash);
   const complaintRaw = parseJson<unknown>(complaintBytes);
   const complaint = isComplaint(complaintRaw) ? complaintRaw : null;
 

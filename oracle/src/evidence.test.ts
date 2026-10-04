@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { collectEvidence, dealPaths, type DealRefs, type FetchBytes } from "./evidence.ts";
+import { collectEvidence, type DealRefs, type FetchBytes } from "./evidence.ts";
 import { decideFromEvidence } from "./decide.ts";
 import { sha256Hex } from "./hash.ts";
 
@@ -10,29 +10,31 @@ const enc = (s: string) => new TextEncoder().encode(s);
 function world() {
   const photo = enc("jpeg-bytes");
   const files = new Map<string, Uint8Array>();
-  files.set(`listings/${deal}/photo-0.jpg`, photo);
+  const photoUrl = `http://srv/media/${sha256Hex(photo)}`;
+  files.set(photoUrl, photo);
   const metadata = enc(JSON.stringify({
     v: 1, title: "Kurtka", description: "", brand: "X", size: "M", condition: "dobry",
     defects: ["mała dziurka przy kieszeni"],
-    photos: [{ path: `listings/${deal}/photo-0.jpg`, sha256: sha256Hex(photo) }],
+    photos: [{ url: photoUrl, sha256: sha256Hex(photo) }],
   }));
-  const metadataUri = `https://x.supabase.co/storage/v1/object/public/unbox/listings/${deal}/metadata.json`;
+  const metadataUri = "http://srv/api/listings/l-1/metadata.json";
   files.set(metadataUri, metadata);
-  const p = dealPaths(deal);
-  files.set(p.packing, enc("packing-video"));
-  files.set(p.unboxing, enc("unboxing-video"));
-  files.set(p.complaint, enc(JSON.stringify({ v: 1, category: "damage", description: "plama", created_at: "2026-10-04T10:00:00Z" })));
+  const packingB = enc("packing-video");
+  const unboxingB = enc("unboxing-video");
+  const complaintB = enc(JSON.stringify({ v: 1, category: "damage", description: "plama", created_at: 1791108000 }));
+  for (const b of [packingB, unboxingB, complaintB]) files.set(sha256Hex(b), b);
   const refs: DealRefs = {
     deal,
     metadataUri,
     listingHash: sha256Hex(metadata),
-    packingVideoHash: sha256Hex(files.get(p.packing)!),
-    unboxingVideoHash: sha256Hex(files.get(p.unboxing)!),
-    complaintHash: sha256Hex(files.get(p.complaint)!),
+    packingVideoHash: sha256Hex(packingB),
+    unboxingVideoHash: sha256Hex(unboxingB),
+    complaintHash: sha256Hex(complaintB),
     trackingNumber: "123",
   };
+  const key = { packing: refs.packingVideoHash, unboxing: refs.unboxingVideoHash, complaint: refs.complaintHash };
   const fetchBytes: FetchBytes = async (ref) => files.get(ref) ?? null;
-  return { files, refs, fetchBytes, p };
+  return { files, refs, fetchBytes, key, photoUrl };
 }
 
 test("all evidence intact → both sides ok, model needed", async () => {
@@ -47,16 +49,17 @@ test("all evidence intact → both sides ok, model needed", async () => {
 });
 
 const scenarios: [string, (w: ReturnType<typeof world>) => void, "SELLER" | "BUYER"][] = [
-  ["unboxing missing", (w) => { w.files.delete(w.p.unboxing); }, "SELLER"],
-  ["unboxing swapped", (w) => { w.files.set(w.p.unboxing, enc("other")); }, "SELLER"],
-  ["complaint missing", (w) => { w.files.delete(w.p.complaint); }, "SELLER"],
-  ["complaint hash ok but not JSON", (w) => { const b = enc("not json"); w.files.set(w.p.complaint, b); w.refs.complaintHash = sha256Hex(b); }, "SELLER"],
-  ["packing missing", (w) => { w.files.delete(w.p.packing); }, "BUYER"],
-  ["packing swapped", (w) => { w.files.set(w.p.packing, enc("other")); }, "BUYER"],
+  ["unboxing missing", (w) => { w.files.delete(w.key.unboxing); }, "SELLER"],
+  ["unboxing swapped", (w) => { w.files.set(w.key.unboxing, enc("other")); }, "SELLER"],
+  ["complaint missing", (w) => { w.files.delete(w.key.complaint); }, "SELLER"],
+  ["complaint hash ok but not JSON", (w) => { const b = enc("not json"); w.files.set(w.key.complaint, b); w.refs.complaintHash = sha256Hex(b); }, "SELLER"],
+  ["packing missing", (w) => { w.files.delete(w.key.packing); }, "BUYER"],
+  ["packing swapped", (w) => { w.files.set(w.key.packing, enc("other")); }, "BUYER"],
   ["metadata missing", (w) => { w.files.delete(w.refs.metadataUri); }, "BUYER"],
   ["metadata edited after listing", (w) => { w.files.set(w.refs.metadataUri, enc("{}")); }, "BUYER"],
-  ["photo swapped", (w) => { w.files.set(`listings/${deal}/photo-0.jpg`, enc("other")); }, "BUYER"],
-  ["both sides broken → buyer first", (w) => { w.files.delete(w.p.packing); w.files.delete(w.p.unboxing); }, "SELLER"],
+  ["photo swapped", (w) => { w.files.set(w.photoUrl, enc("other")); }, "BUYER"],
+  ["photo missing", (w) => { w.files.delete(w.photoUrl); }, "BUYER"],
+  ["both sides broken → buyer first", (w) => { w.files.delete(w.key.packing); w.files.delete(w.key.unboxing); }, "SELLER"],
 ];
 
 for (const [name, patch, expected] of scenarios) {
