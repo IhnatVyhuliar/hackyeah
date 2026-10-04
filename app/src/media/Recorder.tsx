@@ -46,7 +46,7 @@ export function Recorder({ mode, onDone, onCancel }: {
   };
   return (
     <View style={{ flex: 1, backgroundColor: '#0E0E12' }}>
-      <CameraView ref={cam} style={{ flex: 1 }} mode="video" videoQuality="720p" mute onCameraReady={() => setReady(true)}
+      <CameraView ref={cam} style={{ flex: 1 }} facing="back" mode="video" videoQuality="720p" mute onCameraReady={() => setReady(true)}
         barcodeScannerSettings={mode === 'unboxing' ? { barcodeTypes: ['qr'] } : undefined}
         onBarcodeScanned={mode === 'unboxing' ? ({ data }) => {
           if (!qr.current && started.current && data?.startsWith(QR_PREFIX)) { qr.current = data; setQrSeen(true); }

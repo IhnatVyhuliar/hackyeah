@@ -10,7 +10,7 @@ export function QrScanner({ prefix, onScan, onCancel }: { prefix: string; onScan
   if (!perm) return <View style={{ flex: 1, backgroundColor: '#0E0E12' }} />;
   if (!perm.granted) return <Permission ask={ask} onCancel={onCancel} />;
   return (
-    <CameraView style={{ flex: 1 }} barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+    <CameraView style={{ flex: 1 }} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
       onBarcodeScanned={({ data }) => {
         if (done.current || !data?.startsWith(prefix)) return;
         done.current = true;

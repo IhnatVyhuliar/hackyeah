@@ -5,7 +5,8 @@ import { View } from 'react-native';
 import { LIMIT_S, type RecMode } from './brief';
 import { RecOverlay } from './RecOverlay';
 
-const MIME = ['video/mp4;codecs=avc1', 'video/mp4'];
+// avc3 first: Chrome warns that avc1 must keep one codec description for the whole recording.
+const MIME = ['video/mp4;codecs=avc3', 'video/mp4;codecs=avc1', 'video/mp4'];
 
 function testPicture(canvas: HTMLCanvasElement, mode: RecMode): () => void {
   const g = canvas.getContext('2d')!;
@@ -31,6 +32,7 @@ export function Recorder({ mode, onDone, onCancel }: {
   const stream = useRef<MediaStream | null>(null);
   const rec = useRef<MediaRecorder | null>(null);
   const started = useRef<number | null>(null);
+  const alive = useRef(true);   // false after cancel/unmount: a stopped recorder must not deliver the file
   const [source, setSource] = useState<'kamera' | 'obraz testowy' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -40,7 +42,7 @@ export function Recorder({ mode, onDone, onCancel }: {
     let cancelled = false;
     (async () => {
       try {
-        const s = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
+        const s = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: { ideal: 'environment' } }, audio: false });
         if (cancelled) return s.getTracks().forEach((t) => t.stop());
         stream.current = s;
         if (video.current) video.current.srcObject = s;
@@ -55,6 +57,7 @@ export function Recorder({ mode, onDone, onCancel }: {
     const iv = setInterval(() => setNow(Date.now()), 250);
     return () => {
       cancelled = true;
+      alive.current = false;
       clearInterval(iv);
       stopDrawing?.();
       if (rec.current?.state === 'recording') rec.current.stop();
@@ -72,6 +75,7 @@ export function Recorder({ mode, onDone, onCancel }: {
     r.onstop = () => {
       const secs = Math.round((Date.now() - (started.current ?? Date.now())) / 1000);
       started.current = null;
+      if (!alive.current) return;
       onDone(URL.createObjectURL(new Blob(chunks, { type: 'video/mp4' })), null, secs);
     };
     r.start(1000);
@@ -87,7 +91,7 @@ export function Recorder({ mode, onDone, onCancel }: {
       <video ref={video} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', display: source === 'kamera' ? 'block' : 'none' }} />
       <canvas ref={canvas} width={1280} height={720} style={{ width: '100%', height: '100%', objectFit: 'contain', display: source === 'obraz testowy' ? 'block' : 'none' }} />
       <RecOverlay mode={mode} el={el} recording={!!started.current} qrSeen={false} source={source ?? '…'} error={error}
-        onStart={start} onStop={() => rec.current?.stop()} onCancel={onCancel} />
+        onStart={start} onStop={() => rec.current?.stop()} onCancel={() => { alive.current = false; onCancel(); }} />
     </View>
   );
 }
