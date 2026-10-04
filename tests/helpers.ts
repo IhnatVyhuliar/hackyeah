@@ -118,3 +118,21 @@ export const settleExpired = (s: Party, caller: Kp) =>
   program.methods.settleExpired()
     .accountsPartial({ caller: caller.publicKey, deal: s.deal, seller: s.seller.publicKey, buyer: s.buyer.publicKey })
     .signers([caller]).rpc();
+
+export const returnCommitment = (deal: Pk, secret: Uint8Array) => sha256(Buffer.from("return"), deal.toBuffer(), secret);
+
+export const markReturned = (d: { deal: Pk }, who: Kp, commitment: Uint8Array, video = sha256(Buffer.from("return.mp4")), tracking = "ZWROT-1") =>
+  program.methods.markReturned(bytes32(commitment), bytes32(video), tracking)
+    .accountsPartial({ buyer: who.publicKey, deal: d.deal }).signers([who]).rpc();
+
+export const confirmReturn = (d: { deal: Pk; buyer: Kp }, who: Kp, secret: Uint8Array) =>
+  program.methods.confirmReturn(bytes32(secret))
+    .accountsPartial({ seller: who.publicKey, deal: d.deal, buyer: d.buyer.publicKey }).signers([who]).rpc();
+
+export async function createReturning() {
+  const d = await createDisputed();
+  await resolve(d, d.arbiter, "buyer");
+  const returnSecret = randomBytes(32);
+  await markReturned(d, d.buyer, returnCommitment(d.deal, returnSecret));
+  return { ...d, returnSecret };
+}
