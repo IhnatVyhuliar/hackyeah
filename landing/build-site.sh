@@ -3,11 +3,12 @@
 #   index.html + assets/   the landing (laid out for laptops)
 #   app/                   web export of the app (app/, demo engine); phones are sent here
 # The Expo project is generated in landing/.build/ (gitignored) on the first run and reused afterwards.
-# BASE_URL is the path the site is served under (default /sellsor).
+# BASE_URL is the path the site is served under (default /sellsor). APP_SRC is the app to build
+# (default app/, working tree included); point it at e.g. `git archive HEAD app` to leave out local edits.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_SRC="$HERE/../app"
+APP_SRC="${APP_SRC:-$HERE/../app}"
 BASE_URL="${BASE_URL:-/sellsor}"
 WORK="$HERE/.build"
 APP="$WORK/sellsor-app"
@@ -42,7 +43,8 @@ echo "==> Exporting web build"
 rm -rf "$WORK/web"
 (cd "$APP" && npx expo export -p web --output-dir "$WORK/web" --clear)
 
-# Polish UI, and on wide screens keep the app at phone width instead of stretching it.
+# Polish UI. Wide screens keep the app at phone width instead of stretching it; on a computer it is an
+# iPhone 16 Pro Max screen (440 x 956 pt) in a frame, shrunk to the window height when needed.
 node -e '
   const fs = require("fs");
   const p = process.argv[1];
@@ -51,7 +53,14 @@ node -e '
   s = s.replace("<title>", "<meta name=\"theme-color\" content=\"#0B0B0F\" />\n    <title>");
   s = s.replace("</style>", `  html, body { background: #050507; }
       #root { position: relative; max-width: 440px; margin: 0 auto; background: #0B0B0F; }
-      @media (min-width: 480px) { #root { border-left: 1px solid #1D1D24; border-right: 1px solid #1D1D24; } }
+      @media (hover: hover) and (pointer: fine) and (min-width: 600px) {
+        body { display: flex; overflow: auto; }
+        #root {
+          flex: none; margin: auto; max-width: none; height: auto; aspect-ratio: 440 / 956;
+          width: clamp(320px, calc((100vh - 68px) * 440 / 956), 440px);
+          border: 10px solid #1D1D24; border-radius: 52px; overflow: hidden;
+        }
+      }
     </style>`);
   fs.writeFileSync(p, s);
 ' "$WORK/web/index.html"
