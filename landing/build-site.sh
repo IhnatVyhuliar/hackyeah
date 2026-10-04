@@ -43,22 +43,29 @@ echo "==> Exporting web build"
 rm -rf "$WORK/web"
 (cd "$APP" && npx expo export -p web --output-dir "$WORK/web" --clear)
 
-# Polish UI. Wide screens keep the app at phone width instead of stretching it; on a computer it is an
-# iPhone 16 Pro Max screen (440 x 956 pt) in a frame, shrunk to the window height when needed.
+# Polish UI. Wide screens keep the app at phone width instead of stretching it. On a computer the app keeps
+# the iPhone 16 Pro Max layout (440 x 956 pt) and is scaled as a whole to the full window height.
 node -e '
   const fs = require("fs");
   const p = process.argv[1];
   let s = fs.readFileSync(p, "utf8");
   s = s.replace("<html lang=\"en\">", "<html lang=\"pl\">");
-  s = s.replace("<title>", "<meta name=\"theme-color\" content=\"#0B0B0F\" />\n    <title>");
+  s = s.replace("<title>", `<meta name="theme-color" content="#0B0B0F" />
+    <script>
+      (function () {
+        function fit() { document.documentElement.style.setProperty("--phone-scale", String(Math.min(innerHeight / 956, innerWidth / 440))); }
+        fit();
+        addEventListener("resize", fit);
+      })();
+    </script>
+    <title>`);
   s = s.replace("</style>", `  html, body { background: #050507; }
       #root { position: relative; max-width: 440px; margin: 0 auto; background: #0B0B0F; }
       @media (hover: hover) and (pointer: fine) and (min-width: 600px) {
-        body { display: flex; overflow: auto; }
         #root {
-          flex: none; margin: auto; max-width: none; height: auto; aspect-ratio: 440 / 956;
-          width: clamp(320px, calc((100vh - 68px) * 440 / 956), 440px);
-          border: 10px solid #1D1D24; border-radius: 52px; overflow: hidden;
+          position: absolute; top: 0; left: 50%; flex: none; margin: 0; max-width: none;
+          width: 440px; height: 956px; box-shadow: 0 0 0 1px #1D1D24;
+          transform-origin: top center; transform: translateX(-50%) scale(var(--phone-scale, 1));
         }
       }
     </style>`);
