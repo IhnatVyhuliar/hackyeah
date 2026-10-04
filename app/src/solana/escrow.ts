@@ -1,5 +1,6 @@
 // SolanaEscrow core: no React Native imports, so tests/escrow-client.test.ts runs it against Surfpool.
 // Every check here is also enforced by the program; checks before signing only save the user a fee.
+import { Buffer } from 'buffer';
 import { AnchorProvider, BN, Program, type Idl } from '@anchor-lang/core';
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SYSVAR_CLOCK_PUBKEY, Transaction, VersionedTransaction } from '@solana/web3.js';
 import { sha256 } from '@noble/hashes/sha2.js';
@@ -31,6 +32,8 @@ export function createEscrowCore(d: EscrowDeps): Escrow {
   const wallet = { publicKey: me, signTransaction: async <T extends Transaction | VersionedTransaction>(tx: T) => sign(tx),
     signAllTransactions: async <T extends Transaction | VersionedTransaction>(txs: T[]) => txs.map(sign) };
   const provider = new AnchorProvider(d.connection, wallet as never, { commitment: 'confirmed', preflightCommitment: 'confirmed' });
+  // Hermes may lack structuredClone, which @anchor-lang/core calls on the IDL (plain JSON, so a JSON clone is safe).
+  (globalThis as { structuredClone?: unknown }).structuredClone ??= (v: unknown) => JSON.parse(JSON.stringify(v));
   const program = new Program<UnboxEscrow>(d.idl as UnboxEscrow, provider);
   const explorer = (sig: string) => `https://explorer.solana.com/tx/${sig}?cluster=${d.cluster ?? 'devnet'}`;
 
@@ -66,7 +69,9 @@ export function createEscrowCore(d: EscrowDeps): Escrow {
     async networkNow() {
       const info = await d.connection.getAccountInfo(SYSVAR_CLOCK_PUBKEY, 'confirmed');
       if (!info) throw new EscrowError('Network', 'Nie udało się odczytać czasu sieci.');
-      return Number(new DataView(info.data.buffer, info.data.byteOffset).getBigInt64(32, true));
+      // unix_timestamp is an i64 at offset 32; two 32-bit reads because Hermes may lack BigInt64 DataView methods.
+      const dv = new DataView(info.data.buffer, info.data.byteOffset);
+      return dv.getUint32(32, true) + dv.getInt32(36, true) * 2 ** 32;
     },
     async requestTestSol() {
       try {

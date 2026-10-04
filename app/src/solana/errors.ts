@@ -1,10 +1,10 @@
 // Anchor / web3 errors → EscrowError with Polish copy (no "transaction", "signature", "lamport").
-import { EscrowError, type EscrowErrorCode } from '@unbox/shared';
+import { EscrowError, isEscrowError, type EscrowErrorCode } from '@unbox/shared';
 
 const PROGRAM: Record<string, [EscrowErrorCode, string]> = {
   InvalidStatus: ['InvalidStatus', 'Ktoś wykonał ruch w tej umowie chwilę wcześniej. Pokazujemy aktualny stan.'],
   Unauthorized: ['Unauthorized', 'Tę czynność może wykonać tylko druga strona umowy.'],
-  DeadlinePassed: ['DeadlinePassed', 'Umowa przyjmuje tę czynność tylko przed terminem. Po terminie wykona regułę sama – środki nie przepadły.'],
+  DeadlinePassed: ['DeadlinePassed', 'Umowa przyjmuje tę czynność tylko przed terminem. Po terminie każdy może domknąć umowę według jej reguł – środki nie przepadły.'],
   DeadlineNotReached: ['DeadlineNotReached', 'Zegar telefonu wyprzedza czas sieci o kilka sekund. Spróbuj za chwilę – nic nie zostało pobrane.'],
   ListingHashMismatch: ['ListingMismatch', 'Opis albo zdjęcia różnią się od zapisanych w umowie, więc umowa odrzuciła zakup. Środki nie zostały pobrane.'],
   ArbiterMismatch: ['ArbiterMismatch', 'Weryfikator w umowie jest inny niż ten, któremu ufa aplikacja. Środki nie zostały pobrane.'],
@@ -16,7 +16,7 @@ const PROGRAM: Record<string, [EscrowErrorCode, string]> = {
 };
 
 export function toEscrowError(e: unknown): EscrowError {
-  if (e instanceof EscrowError) return e;
+  if (isEscrowError(e)) return e;
   const x = e as { error?: { errorCode?: { code?: string } }; logs?: string[]; message?: string; name?: string };
   const code = x?.error?.errorCode?.code;
   if (code) {
