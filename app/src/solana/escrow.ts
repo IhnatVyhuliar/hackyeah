@@ -60,7 +60,7 @@ export function createEscrowCore(d: EscrowDeps): Escrow {
     return Array.from(q.secret);
   }
 
-  return {
+  const api: Escrow = {
     mode: 'solana',
     walletAddress: async () => me.toBase58(),
     async networkNow() {
@@ -132,4 +132,13 @@ export function createEscrowCore(d: EscrowDeps): Escrow {
       return run(() => program.methods.settleExpired().accountsPartial({ caller: me, deal, seller: acc.seller, buyer: acc.buyer }).rpc());
     },
   };
+  // Every async method rejects only with EscrowError (pre-checks, fetchBytes, key parsing, RPC reads included).
+  const guarded: Record<string, unknown> = { ...api };
+  for (const [k, v] of Object.entries(api)) {
+    if (typeof v !== 'function') continue;
+    guarded[k] = async (...a: unknown[]) => {
+      try { return await (v as (...x: unknown[]) => Promise<unknown>)(...a); } catch (e) { throw toEscrowError(e); }
+    };
+  }
+  return guarded as unknown as Escrow;
 }

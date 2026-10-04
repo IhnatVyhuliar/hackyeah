@@ -99,4 +99,13 @@ describe("SolanaEscrow against the program", () => {
     await m.mk(await funded()).settleExpired(m.key);
     assert.equal(statusOf(await program.account.deal.fetch(m.deal)), "refunded");
   });
+
+  it("rejects only with EscrowError: bad deal key, dead RPC", async () => {
+    const m = await market();
+    await assert.rejects(m.b.acceptDelivery({ id: "x", deal: "not-a-key" }, "UNBOX1:a:b"), (e) => isEscrowError(e) && e.code === "Rejected");
+    await assert.rejects(m.b.settleExpired({ id: "x", deal: null }), (e) => isEscrowError(e) && e.code === "Rejected");
+    const dead = createEscrowCore({ connection: new anchor.web3.Connection("http://127.0.0.1:9", "confirmed"), keypair: m.buyer,
+      idl, trustedArbiter: m.arbiter.publicKey, fetchBytes });
+    await assert.rejects(dead.networkNow(), code("Network"));
+  });
 });

@@ -10,6 +10,9 @@ const PROGRAM: Record<string, [EscrowErrorCode, string]> = {
   ArbiterMismatch: ['ArbiterMismatch', 'Weryfikator w umowie jest inny niż ten, któremu ufa aplikacja. Środki nie zostały pobrane.'],
   QrMismatch: ['QrMismatch', 'Karta pochodzi z innej paczki. Umowa jest bez zmian – zeskanuj kartę z tej przesyłki.'],
   SameParty: ['Rejected', 'Nie możesz kupić własnego ogłoszenia.'],
+  StringTooLong: ['Rejected', 'Numer przesyłki musi mieć od 1 do 32 znaków.'],
+  EmptyText: ['Rejected', 'Numer przesyłki musi mieć od 1 do 32 znaków.'],
+  EmptyHash: ['Rejected', 'Brakuje nagrania albo jego odcisku. Nagraj film jeszcze raz.'],
 };
 
 export function toEscrowError(e: unknown): EscrowError {
@@ -17,8 +20,10 @@ export function toEscrowError(e: unknown): EscrowError {
   const x = e as { error?: { errorCode?: { code?: string } }; logs?: string[]; message?: string; name?: string };
   const code = x?.error?.errorCode?.code;
   if (code) {
-    const [c, msg] = PROGRAM[code] ?? ['Rejected', `Umowa odrzuciła operację (${code}). Nic nie zostało pobrane.`];
-    return new EscrowError(c, msg);
+    const [c, msg] = PROGRAM[code] ?? ['Rejected', 'Umowa odrzuciła tę operację. Nic nie zostało pobrane.'];
+    const err = new EscrowError(c, msg);
+    Object.defineProperty(err, 'cause', { value: e, enumerable: false });
+    return err;
   }
   const text = `${x?.message ?? ''} ${(x?.logs ?? []).join(' ')}`;
   if (/insufficient lamports|no record of a prior credit|insufficient funds/i.test(text)) {
@@ -27,5 +32,7 @@ export function toEscrowError(e: unknown): EscrowError {
   if (/BlockheightExceeded|TransactionExpired|Blockhash not found|Network request failed|fetch failed|timed? ?out|ECONN/i.test(`${x?.name ?? ''} ${text}`)) {
     return new EscrowError('Network', 'Sieć nie potwierdziła operacji na czas. Odśwież stan umowy, zanim spróbujesz ponownie.');
   }
-  return new EscrowError('Rejected', `Operacja nie powiodła się: ${x?.message ?? String(e)}`);
+  const err = new EscrowError('Rejected', 'Operacja nie powiodła się. Odśwież stan umowy i spróbuj ponownie.');
+  Object.defineProperty(err, 'cause', { value: e, enumerable: false });   // raw error for debugging only
+  return err;
 }

@@ -17,3 +17,14 @@ test('missing funds, expired blockhash and dead network', () => {
   assert.equal(toEscrowError({ name: 'TransactionExpiredBlockheightExceededError', message: 'expired' }).code, 'Network');
   assert.equal(toEscrowError(new TypeError('Network request failed')).code, 'Network');
 });
+
+test('no raw English leaks into messages', () => {
+  const raw = toEscrowError(new Error('Account does not exist or has no data X'));
+  assert.equal(raw.code, 'Rejected');
+  assert.doesNotMatch(raw.message, /Account|exist|data|X$/);
+  assert.match(toEscrowError(anchorErr('StringTooLong')).message, /Numer przesyłki/);
+  assert.match(toEscrowError(anchorErr('EmptyText')).message, /Numer przesyłki/);
+  const unknown = toEscrowError(anchorErr('SomethingNew'));
+  assert.doesNotMatch(unknown.message, /SomethingNew/);
+  assert.equal(unknown.code, 'Rejected');
+});
