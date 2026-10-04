@@ -61,14 +61,17 @@ export function Notice({ tone = 'var(--line-strong)', icon, iconColor, title, te
     </View>
   );
 }
-// Explicit 100% size: react-native-web otherwise sizes the image to the bundled asset's pixel size.
+// `src` = bundled image (require), `uri` = listing photo from server media. Sized explicitly: react-native-web otherwise uses the asset's pixel size.
 export const FILL = [StyleSheet.absoluteFill, { width: '100%', height: '100%' }] as any;
-export const Photo = ({ h, w, label, src, style }: any) => (
-  <View style={[{ height: h, width: w, borderRadius: 4, backgroundColor: '#17171D', borderWidth: 1, borderColor: '#1B1B22', overflow: 'hidden' }, style]}>
-    {src ? <Image source={src} resizeMode="cover" style={FILL} /> : null}
-    {label ? <Txt mono s={11} up ls={0.4} c={src ? '#F4F4F6' : 'var(--ink-400)'} style={[{ position: 'absolute', left: 10, bottom: 10 }, src && { backgroundColor: 'rgba(5,5,7,0.72)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4 }]}>{label}</Txt> : null}
-  </View>
-);
+export const Photo = ({ h, w, label, src, uri, style }: any) => {
+  const img = src ?? (uri ? { uri } : null);
+  return (
+    <View style={[{ height: h, width: w, borderRadius: 4, backgroundColor: '#17171D', borderWidth: 1, borderColor: '#1B1B22', overflow: 'hidden' }, style]}>
+      {img ? <Image source={img} resizeMode="cover" style={FILL} /> : null}
+      {label ? <Txt mono s={11} up ls={0.4} c={img ? '#F4F4F6' : 'var(--ink-400)'} style={[{ position: 'absolute', left: 10, bottom: 10 }, img && { backgroundColor: 'rgba(5,5,7,0.72)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4 }]}>{label}</Txt> : null}
+    </View>
+  );
+};
 export function Header({ title, onBack, right }: any) {
   return (
     <View style={{ height: 56, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -90,13 +93,14 @@ export const ExplorerLink = ({ href, label = 'Zobacz w Solana Explorer', strong 
     <Icon name="external-link" size={14} color={strong ? 'var(--fg-1)' : 'var(--fg-2)'} />
   </Pressable>
 );
-export function Field({ label, value, onChangeText, placeholder, mono, suffix, keyboardType, h = 50, style }: any) {
+export function Field({ label, value, onChangeText, placeholder, mono, suffix, keyboardType, secure, multiline, h = 50, style }: any) {
   return (
     <View style={[{ gap: 6 }, style]}>
       {label ? <Label>{label}</Label> : null}
-      <View style={{ height: h, borderWidth: 1, borderColor: LINE_STRONG, borderRadius: 4, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 8 }}>
+      <View style={{ minHeight: h, borderWidth: 1, borderColor: LINE_STRONG, borderRadius: 4, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 8 }}>
         <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={PH} keyboardType={keyboardType} autoCorrect={false}
-          style={{ flex: 1, color: col('var(--fg-1)'), fontFamily: (mono ? F.mono : F.sans)[400], fontSize: 16, paddingVertical: 0 }} />
+          secureTextEntry={secure} multiline={multiline} autoCapitalize={secure || keyboardType === 'email-address' ? 'none' : undefined} accessibilityLabel={label || placeholder}
+          style={{ flex: 1, color: col('var(--fg-1)'), fontFamily: (mono ? F.mono : F.sans)[400], fontSize: 16, paddingVertical: multiline ? 10 : 0, minHeight: multiline ? h : undefined, textAlignVertical: multiline ? 'top' : 'center' }} />
         {suffix ? <Txt mono s={14} c="var(--fg-3)">{suffix}</Txt> : null}
       </View>
     </View>

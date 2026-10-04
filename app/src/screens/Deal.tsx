@@ -44,10 +44,10 @@ export function Deal({ p }: any) {
       <Header title="Transakcja" onBack={p.back} right={<Label>#{D.no}</Label>} />
       <Body>
         <Row gap={12}>
-          <Photo h={64} w={64} src={D.img} />
+          <Photo h={64} w={64} uri={D.photo} />
           <View style={{ flex: 1, gap: 4 }}>
             <Txt s={16} w={500}>{D.title}</Txt>
-            <Txt mono s={15} w={500}>{D.priceText} SOL <Txt mono s={13} c="var(--fg-3)">≈ {D.zl}</Txt></Txt>
+            <Txt mono s={15} w={500}>{D.priceText}{D.zl ? <Txt mono s={13} c="var(--fg-3)"> ≈ {D.zl}</Txt> : null}</Txt>
             <Txt s={14} c="var(--fg-3)">{D.parties}</Txt>
           </View>
         </Row>
@@ -58,6 +58,7 @@ export function Deal({ p }: any) {
             <Btn kind="outline" h={48} s={16} icon="droplet" label="Doładuj testowe SOL" onPress={p.faucet} />
           </Notice>
         ) : null}
+        {D.actPublish ? <Notice tone="var(--warning)" icon="file-warning" title="To ogłoszenie nie jest jeszcze zapisane w umowie" text="Kupujący zobaczą je dopiero, gdy opis i cena trafią do umowy. Zapisanie kosztuje depozyt za miejsce w sieci (ok. 0,0055 SOL)." /> : null}
         {D.nSecured ? <Notice tone="var(--secured)" icon="circle-check" title={D.nTitle} text={D.nText} /> : null}
         {D.nNeutral ? <Notice tone="var(--line-strong)" icon="scan-line" iconColor="var(--fg-2)" title={D.nTitle} text={D.nText} /> : null}
 
@@ -120,8 +121,9 @@ export function Deal({ p }: any) {
         {D.actReturn ? <Btn icon="package" label="Spakuj zwrot" onPress={D.returnFlow} /> : null}
         {D.actScan ? <Btn icon="scan-line" label="Zeskanuj kod zwrotu" onPress={D.scan} /> : null}
         {D.hasVerdict ? <Btn kind="secondary" label="Zobacz ocenę AI" onPress={D.verdict} /> : null}
+        {D.actPublish ? <Btn icon="file-check" label="Zapisz w umowie" onPress={D.publish} /> : null}
         {D.actCancel ? <Btn kind="outline" label="Anuluj ogłoszenie" onPress={D.cancel} /> : null}
-        <ExplorerLink href={D.href} />
+        {D.hasHref ? <ExplorerLink href={D.href} /> : null}
       </Footer>
     </View>
   );

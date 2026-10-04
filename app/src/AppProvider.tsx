@@ -1,147 +1,158 @@
 // @ts-nocheck
-// Demo engine: state machine mock, view models, timers. Ported 1:1 from the Sellsor prototype.
-// Replace tx() / oracle() / fetchRate() with app/src/solana, oracle events and a real price source.
+// View engine: server data (app/src/api) → view models for the screens; every money action goes through
+// Escrow (DemoEscrow or SolanaEscrow) with perform(): upload → contract → chain sync → refresh (CLAUDE.md §6).
+// The engine only hides buttons; the server (demo) or the program (solana) decides.
 import React from 'react';
-import { DEAL_IMG, NAME_IMG, SELL_IMG, PARCEL_CLOSED, SCAN_CARD, unboxImg, packingImg } from './demo/images';
+import { Platform } from 'react-native';
+import { TIMEOUTS_DEMO, type TxResult } from '@unbox/shared';
+import {
+  ApiError, api, cancelListingRest, categories, chainSync, createListing, deals as fetchDeals, devClock, listings, myListings,
+  publishListing, wallet as fetchWallet,
+} from './api';
+import { canBuy, fromDeal, fromListing, money, parsePrice, toUnits } from './data/fromServer';
+import { verdictView } from './data/verdict';
+import { PAYMENTS, demoScenario, escrow, setDemoScenario } from './escrow';
+import { explain, perform } from './flow';
+import { kv } from './kv';
+import { printCard } from './media/qrCard';
+import { uploadJson, uploadPhoto, uploadRecording } from './media/upload';
+import { restore, signIn, signOut } from './session';
+import { importWalletJson } from './solana';
+
 export const Ctx = React.createContext(null);
 export const useP = () => React.useContext(Ctx).phones[0];
-const TO = { Paid: 600, Shipped: 3600, Disputed: 600, ReturnRequested: 600, Returning: 600 };
-const GRACE = 8;
-const SETTLE = { Paid: 'Refunded', Shipped: 'Completed', Disputed: 'ReturnRequested', ReturnRequested: 'Completed', Returning: 'Refunded' };
+
+const WEB = Platform.OS === 'web';
+const GRACE = 2;   // ui.md §7.2: the button unlocks at network time ≥ deadline + 2 s
 const BENEF = { Paid: 'buyer', Shipped: 'seller', Disputed: null, ReturnRequested: 'seller', Returning: 'buyer' };
+const SETTLE_TO = { Paid: 'Refunded', Shipped: 'Completed', Disputed: 'ReturnRequested', ReturnRequested: 'Completed', Returning: 'Refunded' };
 const OUTCOME = { Paid: 'Środki wrócą do kupującego.', Returning: 'Środki wrócą do kupującego.', Shipped: 'Środki trafią do sprzedającego.', ReturnRequested: 'Środki trafią do sprzedającego.', Disputed: 'Kupujący odeśle paczkę za zwrot środków.' };
 const STATUS = { Listed: ['Wystawione', 'var(--fg-3)'], Paid: ['Opłacone – czeka na wysyłkę', 'var(--info)'], Shipped: ['W drodze', 'var(--info)'], Disputed: ['Reklamacja – trwa ocena', 'var(--warning)'], ReturnRequested: ['Reklamacja uznana – odeślij paczkę', 'var(--warning)'], Returning: ['Zwrot w drodze', 'var(--info)'], Completed: ['Zakończone – środki u sprzedającego', 'var(--success)'], Refunded: ['Środki zwrócone kupującemu', 'var(--success)'], Cancelled: ['Anulowane', 'var(--fg-3)'] };
 const FUT = { Listed: ['Paid', 'Shipped', 'Completed'], Paid: ['Shipped', 'Completed'], Shipped: ['Completed'], Disputed: [], ReturnRequested: ['Returning', 'Refunded'], Returning: ['Refunded'] };
 const ALT = { Listed: 'albo: Anulowane', Paid: 'brak nadania w terminie → Środki zwrócone kupującemu', Shipped: 'albo: Reklamacja · brak decyzji w terminie → Zakończone', Disputed: 'ocena „sprzedający” → Zakończone · „kupujący” → odesłanie paczki · brak oceny w terminie → odesłanie paczki', ReturnRequested: 'brak odesłania w terminie → Zakończone', Returning: 'brak potwierdzenia w terminie → Środki zwrócone kupującemu' };
 const ESCROW = ['Paid', 'Shipped', 'Disputed', 'ReturnRequested', 'Returning'];
-const DEADLINE_MSG = { Paid: 'Termin nadania minął. Środki może teraz odebrać kupujący.', Shipped: 'Termin na nagranie otwarcia minął. Środki trafią do sprzedającego.', ReturnRequested: 'Termin odesłania paczki minął. Środki trafią do sprzedającego.', Disputed: 'Termin oceny minął. Kupujący odsyła paczkę za zwrot środków.' };
 const FEE = 0.000005;
-const ERR = { Unauthorized: 6000, InvalidStatus: 6001, DeadlineNotReached: 6002, DeadlinePassed: 6003, QrMismatch: 6004, ListingMismatch: 6005, ArbiterMismatch: 6006 };
-const errCode = n => 'Kod programu: ' + n + ' · ' + ERR[n] + ' (0x' + ERR[n].toString(16) + ')';
-const PROG_FAIL = {
-  settle: ['Termin jeszcze nie minął według sieci', 'Zegar telefonu wyprzedza czas sieci o kilka sekund. Spróbuj za chwilę – nic nie zostało pobrane.', 'DeadlineNotReached', true],
-  buy: ['Ogłoszenie nie zgadza się z umową', 'Opis albo arbiter różnią się od tego, co widzisz w aplikacji, więc umowa odrzuciła zakup. Środki nie zostały pobrane.', 'ListingMismatch', false],
-  qr: ['Kod z karty nie pasuje do tej umowy', 'Karta pochodzi z innej paczki. Umowa jest bez zmian – zeskanuj kartę z tej przesyłki.', 'QrMismatch', true],
-  def: ['Termin na tę czynność minął', 'Umowa przyjmuje ją tylko przed terminem. Po terminie wykona regułę sama – środki nie przepadły.', 'DeadlinePassed', false],
-};
-const FAIL_OPTS = [['ok', 'Wszystko działa'], ['net', 'Sieć nie odpowie'], ['upload', 'Zerwie się wysyłka nagrania'], ['program', 'Umowa odrzuci operację']];
-const SCENES = [
-  { id: 'A', label: 'A · Reklamacja na żywo', cue: 'Kupująca: „Nagraj otwarcie” → pokazuje plamę → „Reklamuję” → po kilku sekundach ocena AI z listą warunków → link do Explorera.' },
-  { id: 'B', label: 'B · Zakup i odbiór', cue: "Kupująca kupuje kurtkę Levi's → sprzedający dostaje powiadomienie i nadaje paczkę → kupująca nagrywa otwarcie → „Wszystko OK” → wypłata w Explorerze." },
-  { id: 'C', label: 'C · Pośrednik znika', cue: 'Sprzedająca nie nadała płaszcza. Odliczanie dochodzi do zera, aplikacja sprawdza czas sieci, przycisk się odblokowuje → „Odbierz środki”. Nikt nie musi się zgodzić.' },
-];
-const CATEGORIES = [
-  ['Kurtki', ['Kurtka jeansowa', 'Kurtka puchowa', 'Kurtka przejściowa', 'Parka', 'Ramoneska'], ["Levi's", 'Zara', 'The North Face', 'Carhartt', 'Mango']],
-  ['Bluzy', ['Bluza z kapturem', 'Bluza crewneck', 'Bluza rozpinana'], ['Nike', 'Adidas', 'Champion', 'Carhartt', 'H&M']],
-  ['Swetry', ['Sweter z wełny', 'Kardigan', 'Golf', 'Sweter oversize'], ['COS', 'Arket', 'Uniqlo', 'Massimo Dutti', '& Other Stories']],
-  ['Koszule', ['Koszula lniana', 'Koszula oxford', 'Koszula flanelowa'], ['Massimo Dutti', 'Ralph Lauren', 'Uniqlo', 'Reserved']],
-  ['T-shirty', ['T-shirt basic', 'T-shirt z nadrukiem', 'Longsleeve'], ['Nike', 'Stüssy', 'COS', 'Uniqlo', 'H&M']],
-  ['Spodnie', ['Jeansy 501', 'Chinosy', 'Spodnie cargo', 'Spodnie dresowe'], ["Levi's", 'Dickies', 'Zara', 'Adidas']],
-  ['Sukienki', ['Sukienka midi', 'Sukienka maxi', 'Sukienka koszulowa'], ['Mango', 'Zara', '& Other Stories', 'Reserved']],
-  ['Buty', ['Sneakersy', 'Botki', 'Mokasyny', 'Trampki'], ['New Balance', 'Nike', 'Dr. Martens', 'Converse', 'Vans']],
-  ['Akcesoria', ['Torba na ramię', 'Czapka beanie', 'Szalik wełniany', 'Pasek skórzany'], ['COS', 'Carhartt', 'Arket', 'Mango']],
-];
+const NONE: TxResult = { signature: null, explorerUrl: null };
 const FCONDS = ['Nowy z metką', 'Bardzo dobry', 'Dobry', 'Używany'];
-const FLAW_POOL = ['Drobne zmechacenie', 'Przetarcie przy mankiecie', 'Mała plamka na podszewce', 'Brak metki z rozmiarem', 'Lekkie odbarwienie', 'Zaciągnięcie na rękawie', 'Ślady noszenia na podeszwie'];
 const SIZE_OPTS = ['XS', 'S', 'M', 'L', 'XL', '38', '39', '40', '41', '42', '43', '44', '45', 'Uniwersalny'];
 const SORTS = [['new', 'Najnowsze'], ['cheap', 'Najtańsze'], ['exp', 'Najdroższe']];
 const PRICE_MAX = 1.5;
 const DIAC = { 'ą': 'a', 'ć': 'c', 'ę': 'e', 'ł': 'l', 'ń': 'n', 'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z', 'ü': 'u' };
 const norm = s => s.toLowerCase().replace(/[ąćęłńóśźżü]/g, ch => DIAC[ch]);
-const fmtPL = (v, dp) => { const [i, d] = v.toFixed(dp).split('.'); return i.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0') + (d ? ',' + d : ''); };
+const fmtPL = (v, dp) => { const [i, d] = v.toFixed(dp).split('.'); return i.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + (d ? ',' + d : ''); };
 const plural = n => (n === 1 ? 'ogłoszenie' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'ogłoszenia' : 'ogłoszeń');
-function genItems() {
-  let a = 20261004;
-  const r = () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  const pick = xs => xs[Math.floor(r() * xs.length)];
-  const out = [];
-  for (let i = 0; i < 96; i++) {
-    const [cat, names, brands] = pick(CATEGORIES), name = pick(names), brand = pick(brands);
-    const size = cat === 'Buty' ? String(38 + Math.floor(r() * 8)) : cat === 'Akcesoria' ? 'Uniwersalny' : pick(['XS', 'S', 'M', 'L', 'XL']);
-    const cond = pick(FCONDS), nf = r() < 0.45 ? 0 : r() < 0.7 ? 1 : 2, flaws = [];
-    while (flaws.length < nf) { const f = pick(FLAW_POOL); if (!flaws.includes(f)) flaws.push(f); }
-    const price = Math.round((0.05 + Math.pow(r(), 1.6) * 1.15) * 100) / 100;
-    const seller = r() < 0.1 ? 'kuba' : pick(['marta', 'ania']);
-    out.push({ id: 'g' + i, no: String(100 + i).padStart(4, '0'), title: name + ' ' + brand, img: NAME_IMG[name], brand, size, cond, cat, price, desc: name + ' marki ' + brand + ', rozmiar ' + size + '. Stan: ' + cond.toLowerCase() + '.', flaws, seller, status: 'Listed', changedAt: -(1800 + i * 1500 + Math.floor(r() * 900)) });
-  }
-  return out;
-}
-const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-const rnd = n => Array.from({ length: n }, () => B58[Math.floor(Math.random() * 58)]).join('');
-const short = s => s.slice(0, 4) + '…' + s.slice(-4);
+const short = s => (s ? s.slice(0, 4) + '…' + s.slice(-4) : '');
 const ICON = n => n;
-const EXPL = sig => 'https://explorer.solana.com/tx/' + sig + '?cluster=devnet';
-const BASE = new Date(2026, 9, 4, 14, 0, 0).getTime();
+const ADDR = pda => 'https://explorer.solana.com/address/' + pda + '?cluster=devnet';
 const pad = n => String(n).padStart(2, '0');
-const hhmm = t => { const d = new Date(BASE + t * 1000); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const hhmm = t => { const d = new Date(t * 1000); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
 const DAYS = ['ndz', 'pon', 'wt', 'śr', 'czw', 'pt', 'sob'];
-const stamp = t => { const d = new Date(BASE + t * 1000); return (d.toDateString() === new Date(BASE).toDateString() ? '' : DAYS[d.getDay()] + ' ') + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const stamp = t => { const d = new Date(t * 1000); return (d.toDateString() === new Date().toDateString() ? '' : DAYS[d.getDay()] + ' ') + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
 const hms = s => { s = Math.max(0, Math.floor(s)); return pad(Math.floor(s / 3600)) + ':' + pad(Math.floor(s / 60) % 60) + ':' + pad(s % 60); };
-const ARBITER = 'ArbT4Gq9xVmZ7kNc2pRwYhB5sLdF8uJtE3nQaK6vW1';
-const USERS = {
-  ola: { name: 'Ola', addr: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU' },
-  kuba: { name: 'Kuba', addr: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM' },
-  marta: { name: 'Marta', addr: 'HN7cABqLq46Es1jh92dQQisAq662SmxEZZsHHe4YWrH' },
-  ania: { name: 'Ania', addr: '3Kzh9qAqVWQhyNwZDN6BYzAzRXYgEXZSPFT4QnMrmjke' },
-};
-const PHONES = ['ola', 'kuba'];
-const ROLE = { ola: { bg: '#9945FF', label: 'Kupująca · Ola', caption: 'Ola' }, kuba: { bg: '#FFB547', label: 'Sprzedający · Kuba', caption: 'Kuba' } };
+const ARBITER = process.env.EXPO_PUBLIC_ORACLE_PUBKEY || '';
 const CONDS = ['Nowy', 'B. dobry', 'Dobry', 'Używany'];
+const CONDK = { 'Nowy': 'nowy', 'B. dobry': 'jak_nowy', 'Dobry': 'dobry', 'Używany': 'widoczne_slady' };
+// Complaint chips → ComplaintCategory (@unbox/shared).
 const CATS = ['Nieujawniona wada', 'Inny przedmiot', 'Zły rozmiar', 'Uszkodzenie'];
+const CAT_KEY = { 'Nieujawniona wada': 'not_as_described', 'Inny przedmiot': 'wrong_item', 'Zły rozmiar': 'not_as_described', 'Uszkodzenie': 'damaged' };
 const TABS = [['browse', 'layout-grid', 'Przeglądaj'], ['sell', 'plus', 'Wystaw'], ['deals', 'package', 'Transakcje'], ['wallet', 'wallet', 'Portfel']];
+const QUICK = [['ania@demo.pl', 'Ania · sprzedająca'], ['bartek@demo.pl', 'Bartek · kupujący'], ['celina@demo.pl', 'Celina']];
 const BRIEF = {
-  unboxing: { title: 'Nagraj otwarcie od zamkniętej paczki', items: ['Zacznij od zamkniętej paczki – pokaż etykietę i taśmę.', 'Nagrywaj bez przerw. Limit to 2 minuty.', 'Pokaż kartę z kodem, gdy tylko ją zobaczysz.', 'Pokaż całe ubranie z obu stron, w dobrym świetle.'], warning: 'Ucięte, zasłonięte albo ciemne nagranie liczy się przeciwko osobie, która je nagrała. Bez nagrania nie ma reklamacji.' },
-  packing: { title: 'Nagraj pakowanie w jednym ujęciu', items: ['Pokaż ubranie z obu stron, także wady z listy.', 'Włóż kartę z kodem do środka – na nagraniu.', 'Zaklej paczkę i pokaż etykietę z numerem.', 'Nagrywaj bez przerw. Limit to 2 minuty.'], warning: 'Jeśli kupujący złoży reklamację, słabe nagranie pakowania działa przeciwko Tobie.' },
+  unboxing: { title: 'Nagraj otwarcie od zamkniętej paczki', items: ['Zacznij od zamkniętej paczki – pokaż etykietę i taśmę.', 'Nagrywaj bez przerw. Limit to 2 minuty.', 'Pokaż kartę z kodem, gdy tylko ją zobaczysz.', 'Pokaż całe ubranie z obu stron, w dobrym świetle.'], warning: 'Ucięte, zasłonięte albo ciemne nagranie liczy się przeciwko osobie, która je nagrała. Bez nagrania nie ma reklamacji. Nagranie trafia do oceny tylko przy reklamacji i jest wtedy dostępne pod adresem zapisanym w umowie.' },
+  packing: { title: 'Nagraj pakowanie w jednym ujęciu', items: ['Pokaż ubranie z obu stron, także wady z listy.', 'Włóż kartę z kodem do środka – na nagraniu.', 'Zaklej paczkę i pokaż etykietę z numerem.', 'Nagrywaj bez przerw. Limit to 2 minuty.'], warning: 'Jeśli kupujący złoży reklamację, słabe nagranie pakowania działa przeciwko Tobie. Nagranie jest dostępne pod adresem zapisanym w umowie.' },
   return: { title: 'Nagraj pakowanie zwrotu', items: ['Pokaż ubranie, które odsyłasz, z obu stron.', 'Włóż nową kartę zwrotu do środka – na nagraniu.', 'Zaklej paczkę i pokaż etykietę z numerem.', 'Nagrywaj bez przerw. Limit to 2 minuty.'], warning: 'Słabe albo ucięte nagranie zwrotu działa przeciwko Tobie.' },
 };
+const freshForm = () => ({ title: 'Marynarka Zara', brand: 'Zara', size: 'M', cond: 'B. dobry', price: PAYMENTS === 'solana' ? '0.05' : '50', priceError: '',
+  desc: 'Marynarka z domieszką wełny, noszona kilka razy.', catId: null, flaws: ['Drobne zaciągnięcie na rękawie'], flawDraft: '', photos: [] });
 
 export class AppProvider extends React.Component<any, any> {
-  timers = [];
   pending = {};
-  state = { ...this.initial(), rate: { pln: 640, live: false, at: null } };
+  skew = 0;
+  prevStatus = null;
+  state = { me: null, linkError: null, deals: [], wallet: null, cats: [], tick: 0, active: '_', phones: { _: this.ph('_', 'loading') },
+    rate: { pln: 640, live: false, at: null }, devMsg: '' };
 
-  initial() {
-    this.t0 = Date.now();
-    const ev = (st, at, label) => ({ st, label: label || '', at, sig: rnd(88) });
-    const mk = o => ({ buyer: null, hidden: false, flaws: [], listingHash: rnd(44), pda: rnd(44), ...o });
-    const deals = [
-      mk({ id: 'd1', no: '0011', title: "Kurtka jeansowa Levi's", brand: "Levi's", size: 'M', cond: 'Bardzo dobry', price: 0.42, fiat: 312, desc: 'Kurtka trucker z lat 90., ciemny denim. Noszona kilka sezonów, bez dziur.', flaws: ['Przetarcie przy lewym mankiecie', 'Brak jednego guzika wewnątrz'], seller: 'kuba', status: 'Listed', changedAt: -5400, events: [ev('Listed', -5400)] }),
-      mk({ id: 'd2', no: '0012', title: 'New Balance 550', brand: 'New Balance', size: '42', cond: 'Nowy z metką', price: 0.55, fiat: 409, desc: 'Sneakersy biało-zielone, nienoszone, w oryginalnym pudełku.', seller: 'ania', status: 'Listed', changedAt: -9000, events: [ev('Listed', -9000)] }),
-      mk({ id: 'd3', no: '0013', title: 'Koszula lniana Massimo Dutti', brand: 'Massimo Dutti', size: 'L', cond: 'Bardzo dobry', price: 0.24, fiat: 178, desc: 'Biała koszula z lnu, krój regular.', flaws: ['Odbarwienie na kołnierzu'], seller: 'marta', status: 'Listed', changedAt: -12000, events: [ev('Listed', -12000)] }),
-      mk({ id: 'd8', no: '0014', title: 'Sukienka midi Mango', brand: 'Mango', size: 'S', cond: 'Dobry', price: 0.15, fiat: 111, desc: 'Sukienka w drobny wzór, wiskoza.', seller: 'ania', status: 'Listed', changedAt: -15000, events: [ev('Listed', -15000)] }),
-      mk({ id: 'd4', no: '0006', title: 'Płaszcz wełniany Arket', brand: 'Arket', size: 'L', cond: 'Bardzo dobry', price: 0.61, fiat: 453, desc: 'Płaszcz wełniany w kolorze camel.', flaws: ['Drobna plamka na podszewce'], seller: 'marta', buyer: 'ola', status: 'Paid', changedAt: -(TO.Paid - 45), events: [ev('Listed', -90000), ev('Paid', -(TO.Paid - 45))] }),
-      mk({ id: 'd5', no: '0007', title: 'Sweter COS z wełny merino', brand: 'COS', size: 'S', cond: 'Dobry', price: 0.18, fiat: 134, desc: 'Sweter z wełny merino, szary melanż.', flaws: ['Lekkie mechacenie pod pachami'], seller: 'kuba', buyer: 'ola', status: 'Shipped', changedAt: -1260, hidden: true, tracking: '6200 4417 9032 18', packHash: rnd(44), qrCommit: rnd(44), events: [ev('Listed', -86400), ev('Paid', -2400), ev('Shipped', -1260)] }),
-      mk({ id: 'd6', no: '0005', title: 'Bluza Carhartt', brand: 'Carhartt', size: 'M', cond: 'Dobry', price: 0.33, fiat: 245, desc: 'Bluza z kapturem, granatowa.', seller: 'ania', buyer: 'ola', status: 'Completed', changedAt: -170000, tracking: '6200 1180 5521 07', packHash: rnd(44), qrCommit: rnd(44), events: [ev('Listed', -260000), ev('Paid', -200000), ev('Shipped', -190000), ev('Completed', -170000, 'Odebrane – wszystko OK')] }),
-      mk({ id: 'd9', no: '0003', title: 'Kurtka Nike ACG', brand: 'Nike', size: 'L', cond: 'Bardzo dobry', price: 0.54, fiat: 401, desc: 'Kurtka przeciwdeszczowa.', seller: 'kuba', buyer: 'ania', status: 'Completed', changedAt: -300000, tracking: '6200 7781 0042 33', packHash: rnd(44), qrCommit: rnd(44), events: [ev('Listed', -400000), ev('Paid', -350000), ev('Shipped', -330000), ev('Completed', -300000, 'Odebrane – wszystko OK')] }),
-    ];
-    const CAT0 = { d1: 'Kurtki', d2: 'Buty', d3: 'Koszule', d8: 'Sukienki', d4: 'Kurtki', d5: 'Swetry', d6: 'Bluzy', d9: 'Kurtki' };
-    deals.forEach(d => { d.cat = CAT0[d.id]; d.img = DEAL_IMG[d.id]; });
-    genItems().forEach(o => deals.push(mk({ ...o, events: [ev('Listed', o.changedAt)] })));
-    const onb = this.props.onboarding ?? true;
-    return {
-      offset: 0, tick: 0, failMode: 'ok', scene: null, active: this.props.account === 'Kuba (sprzedający)' ? 'kuba' : 'ola', deals,
-      balances: { ola: this.props.buyerBalance ?? 0.38, kuba: 0.84, marta: 2.1, ania: 1.3 },
-      history: {
-        ola: [{ label: 'Zakup · Płaszcz Arket', amt: 0.61, in: false }, { label: 'Zakup · Sweter COS', amt: 0.18, in: false }, { label: 'Zakup · Bluza Carhartt', amt: 0.33, in: false }, { label: 'Doładowanie testowe', amt: 1.5, in: true }],
-        kuba: [{ label: 'Wypłata · Kurtka Nike ACG', amt: 0.54, in: true }, { label: 'Doładowanie testowe', amt: 0.3, in: true }],
-      },
-      phones: { ola: this.ph('ola', onb), kuba: this.ph('kuba', false) },
-    };
-  }
   ph(user, onb) {
-    return { user, tab: 'browse', stack: [], onb: onb ? 'welcome' : null, banner: null, tx: null, sheet: null, rulesOpen: false, feed: 'loading', dealsTab: user === 'kuba' ? 'Sprzedaże' : 'Zakupy',
-      form: { title: 'Marynarka Zara', brand: 'Zara', size: 'M', cond: 'B. dobry', price: '0.20', flaws: ['Drobne zaciągnięcie na rękawie'], flawDraft: '' },
-      rec: null, scan: null, dealsLoad: false, filt: { q: '', cat: 'Wszystko', sizes: [], conds: [], max: PRICE_MAX, sort: 'new', noFlaws: false }, decide: { cat: null, text: '', dur: '' }, pack: { qr: false, video: false, dur: '', tracking: '', mode: 'ship' } };
+    return { user, tab: 'browse', stack: [], onb, banner: null, tx: null, sheet: null, rulesOpen: false, feed: 'loading', feedError: '',
+      dealsTab: 'Zakupy', form: freshForm(), login: { email: '', password: '', error: '' }, walletJson: '',
+      rec: null, unbox: null, scan: null, filt: { q: '', cat: 'Wszystko', sizes: [], conds: [], max: PRICE_MAX, sort: 'new', noFlaws: false },
+      decide: { cat: null, text: '', dur: '' }, pack: { card: null, cardError: '', qr: false, video: false, uri: null, dur: '', tracking: '', mode: 'ship' } };
   }
   componentDidMount() {
-    this.iv = setInterval(() => this.setState({ tick: Date.now() }), 250); PHONES.forEach(k => this.loadFeed(k));
+    this.iv = setInterval(() => this.setState({ tick: Date.now() }), 250);
     this.fetchRate(); this.rateIv = setInterval(() => this.fetchRate(), 30000);
-    this.jIv = setInterval(() => { if (!this.state.rate.live) this.setState(s => ({ rate: { ...s.rate, pln: s.rate.pln * (1 + (Math.random() - 0.5) * 0.003), at: Date.now() } })); }, 4000);
+    restore().then(s => (s ? this.startSession(s, false) : this.setPh('_', { onb: 'welcome' })))
+      .catch(e => this.setPh('_', P => ({ onb: 'welcome', login: { ...P.login, error: explain(e).text } })));
   }
-  componentWillUnmount() { clearInterval(this.iv); clearInterval(this.rateIv); clearInterval(this.jIv); this.timers.forEach(clearTimeout); }
-  now() { return Math.floor((Date.now() - this.t0) / 1000) + this.state.offset; }
-  later(fn, ms) { this.timers.push(setTimeout(fn, ms)); }
-  reset() { this.timers.forEach(clearTimeout); this.timers = []; this.pending = {}; this.setState(this.initial(), () => PHONES.forEach(k => this.loadFeed(k))); }
+  componentWillUnmount() { [this.iv, this.rateIv, this.pollIv, this.clockIv].forEach(clearInterval); }
+
+  // ---------- session ----------
+  startSession(s, fresh) {
+    const k = s.user.id;
+    this.prevStatus = null;
+    this.setState({ me: s.user, linkError: s.walletLinkError, deals: [], wallet: null, active: k, phones: { [k]: this.ph(k, fresh ? 'ready' : null) } },
+      () => { this.refresh(); this.syncClock(); });
+    clearInterval(this.pollIv); this.pollIv = setInterval(() => this.refresh(), 3000);
+    clearInterval(this.clockIv); this.clockIv = setInterval(() => this.syncClock(), 30000);
+  }
+  async login(email, password) {
+    this.setPh('_', P => ({ onb: 'creating', login: { ...P.login, error: '' } }));
+    try { this.startSession(await signIn(email, password), true); }
+    catch (e) { this.setPh('_', P => ({ onb: 'welcome', login: { ...P.login, error: explain(e).text } })); }
+  }
+  async logout() {
+    clearInterval(this.pollIv); clearInterval(this.clockIv);
+    await signOut();
+    this.setState({ me: null, linkError: null, deals: [], wallet: null, active: '_', phones: { _: this.ph('_', 'welcome') } });
+  }
+  async switchAccount(email) { await this.logout(); this.login(email, 'demo1234'); }
+
+  // ---------- data ----------
+  async refresh() {
+    if (!this.state.me) return;
+    if (this.refreshing) return this.refreshing;
+    const k = this.state.active;
+    this.refreshing = (async () => {
+      try {
+        const cats = this.state.cats.length ? this.state.cats : await categories();
+        const [ls, mine, buys, sales, w] = await Promise.all([listings(), myListings(), fetchDeals('buyer'), fetchDeals('seller'), fetchWallet()]);
+        if (this.state.active !== k) return;
+        const names = Object.fromEntries(cats.map(c => [c.id, c.name]));
+        const catOf = new Map([...ls, ...mine].map(l => [l.id, l.categoryId]));
+        const byId = new Map();
+        for (const l of [...ls, ...mine]) byId.set(l.id, fromListing(l, names));
+        for (const d of [...buys, ...sales]) byId.set(d.id, fromDeal(d, names, catOf.get(d.id)));
+        const items = [...byId.values()];
+        this.bannerFor(k, items);
+        this.setState({ cats, deals: items, wallet: w });
+        this.setPh(k, { feed: 'ok', feedError: '' });
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401) return this.logout();
+        this.setPh(k, { feed: 'error', feedError: explain(e).text });
+      } finally {
+        this.refreshing = null;
+      }
+    })();
+    return this.refreshing;
+  }
+  /** The other party moved (seen by polling) and now it is my move: show a banner. */
+  bannerFor(k, items) {
+    const prev = this.prevStatus;
+    this.prevStatus = new Map(items.map(d => [d.id, d.status]));
+    if (!prev) return;
+    for (const d of items) {
+      if ((d.buyer !== k && d.seller !== k) || prev.get(d.id) === d.status || !prev.has(d.id) && d.status === 'Listed') continue;
+      const v = this.dv(d, k);
+      if (v.hasHint || ['Completed', 'Refunded'].includes(d.status) && prev.has(d.id)) {
+        this.setPh(k, { banner: { text: d.title + ': ' + STATUS[d.status][0] + '.', id: d.id, st: Date.now() } });
+        setTimeout(() => this.setPh(k, P => (P.banner && Date.now() - P.banner.st >= 6400 ? { banner: null } : {})), 6500);
+      }
+    }
+  }
+  async syncClock() {
+    try { this.skew = (await escrow.networkNow()) - Date.now() / 1000; } catch { /* keep the last known skew */ }
+  }
+  now() { return Math.floor(Date.now() / 1000 + this.skew); }
   async fetchRate() {
     try {
       const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=pln');
@@ -150,252 +161,302 @@ export class AppProvider extends React.Component<any, any> {
       this.setState({ rate: { pln: v, live: true, at: Date.now() } });
     } catch (e) { this.setState(s => ({ rate: { ...s.rate, live: false, at: s.rate.at || Date.now() } })); }
   }
-  zl(sol) { const v = sol * this.state.rate.pln; if (v > 0 && v < 0.01) return '< 0,01 zł'; return fmtPL(v, v < 100 ? 2 : 0) + ' zł'; }
-  switchTo(u) {
-    this.setPh(this.state.active, { sheet: null }); this.setState({ active: u });
-    const b = this.state.phones[u].banner;
-    if (b) { const st = b.st; this.later(() => this.setPh(u, P => (P.banner && P.banner.st === st ? { banner: null } : {})), 6500); }
-  }
-  takeFail(ok) { const m = this.state.failMode; if (m !== 'ok' && ok(m)) { this.setState({ failMode: 'ok' }); return m; } return null; }
-  fallbackQr() { return (this.props.qrMode ?? 'Podczas nagrania') === 'Skan po nagraniu'; }
-  scene(id) {
-    this.timers.forEach(clearTimeout); this.timers = []; this.pending = {};
-    const s = this.initial(), P = s.phones;
-    s.scene = id; s.active = 'ola'; P.ola = { ...P.ola, onb: null };
-    if (id === 'A') { P.ola = { ...P.ola, tab: 'deals', dealsTab: 'Zakupy', stack: [{ screen: 'deal', id: 'd5' }] }; P.kuba = { ...P.kuba, tab: 'deals', dealsTab: 'Sprzedaże', stack: [{ screen: 'deal', id: 'd5' }] }; }
-    if (id === 'B') { s.balances = { ...s.balances, ola: Math.max(s.balances.ola, 1.38) }; P.ola = { ...P.ola, tab: 'browse', stack: [{ screen: 'listing', id: 'd1' }] }; P.kuba = { ...P.kuba, tab: 'deals', dealsTab: 'Sprzedaże', stack: [] }; }
-    if (id === 'C') { const at = -(TO.Paid - 12); s.deals = s.deals.map(d => (d.id === 'd4' ? { ...d, changedAt: at, events: [d.events[0], { ...d.events[1], at }] } : d)); P.ola = { ...P.ola, tab: 'deals', dealsTab: 'Zakupy', stack: [{ screen: 'deal', id: 'd4' }] }; }
-    this.setState(s, () => PHONES.forEach(k => this.loadFeed(k)));
+  cur() { return this.state.wallet?.currency ?? (PAYMENTS === 'solana' ? 'SOL' : 'PLN'); }
+  bal() { const w = this.state.wallet; return w ? toUnits(w.balanceMinor, w.currency) : 0; }
+  /** Approximate złoty value, only for SOL amounts (orientacyjnie); '' for PLN. */
+  zl(units, currency = this.cur()) {
+    if (currency !== 'SOL') return '';
+    const v = units * this.state.rate.pln; if (v > 0 && v < 0.01) return '< 0,01 zł'; return fmtPL(v, v < 100 ? 2 : 0) + ' zł';
   }
 
-  setPh(k, patch) { this.setState(s => { const P = s.phones[k]; const np = typeof patch === 'function' ? patch(P, s) : patch; return { phones: { ...s.phones, [k]: { ...P, ...np } } }; }); }
+  setPh(k, patch) { this.setState(s => { const P = s.phones[k]; if (!P) return null; const np = typeof patch === 'function' ? patch(P, s) : patch; return { phones: { ...s.phones, [k]: { ...P, ...np } } }; }); }
   go(k, screen, id, extra) { this.setPh(k, P => ({ stack: [...P.stack, { screen, id, ...extra }], sheet: null })); }
-  back(k) { this.setPh(k, P => ({ stack: P.stack.slice(0, -1), sheet: null, rec: null, scan: null })); }
-  tab(k, t) { this.setPh(k, { tab: t, stack: [], sheet: null }); if (t === 'browse') this.loadFeed(k); if (t === 'deals') { this.setPh(k, { dealsLoad: true }); this.later(() => this.setPh(k, { dealsLoad: false }), 700); } }
+  back(k) { this.setPh(k, P => ({ stack: P.stack.slice(0, -1), sheet: null, rec: null })); }
+  tab(k, t) { this.setPh(k, { tab: t, stack: [], sheet: null }); if (t === 'browse' || t === 'deals' || t === 'wallet') this.refresh(); }
   deal(id, s = this.state) { return s.deals.find(d => d.id === id); }
-  loadFeed(k) { this.setPh(k, { feed: 'loading' }); this.later(() => this.setPh(k, { feed: this.takeFail(m => m === 'net') ? 'error' : 'ok' }), 1100); }
 
-  notify(user, text, id) {
-    if (!PHONES.includes(user)) return;
-    const st = Date.now() + Math.random();
-    this.setPh(user, { banner: { text, id, st } });
-    if (user !== this.state.active) return;
-    this.later(() => this.setPh(user, P => (P.banner && P.banner.st === st ? { banner: null } : {})), 6500);
-  }
-  transition(s, id, to, extra, sig, now, label) {
-    const d = this.deal(id, s);
-    const nd = { ...d, ...extra, status: to, changedAt: now, events: [...d.events, { st: to, label: label || '', at: now, sig }] };
-    const bal = { ...s.balances }, hist = { ...s.history };
-    const add = (u, amt, l, inc) => { bal[u] = (bal[u] || 0) + (inc ? amt : -amt); if (hist[u]) hist[u] = [{ label: l, amt, in: inc }, ...hist[u]]; };
-    if (to === 'Paid') add(nd.buyer, d.price, 'Zakup · ' + d.title, false);
-    if (to === 'Completed') add(d.seller, d.price, 'Wypłata · ' + d.title, true);
-    if (to === 'Refunded') add(d.buyer, d.price, 'Zwrot · ' + d.title, true);
-    return { deals: s.deals.map(x => (x.id === id ? nd : x)), balances: bal, history: hist };
-  }
-  fail(k, failTitle, failText, code, retryable) { this.setPh(k, P => ({ tx: { ...P.tx, phase: 'fail', failTitle, failText, code, retryable, needFunds: false } })); }
-  tx(k, cfg) {
+  // ---------- one money action ----------
+  fail(k, failTitle, failText, code, retryable, needFunds = false) { this.setPh(k, P => ({ tx: { ...P.tx, phase: 'fail', failTitle, failText, code, retryable, needFunds } })); }
+  async tx(k, cfg) {
     this.pending[k] = cfg;
-    const mb = cfg.upload ? 38 + Math.floor(Math.random() * 24) : 0, start = Date.now();
-    if (cfg.kind !== 'faucet' && this.state.balances[k] < FEE) {
-      this.setPh(k, { tx: { title: cfg.title, upload: false, mb: 0, start, phase: 'fail', failTitle: 'Brak salda na opłatę sieci', failText: 'Każda operacja kosztuje ułamek grosza (≈ 0.000005 SOL), także odbiór paczki. Doładuj testowe SOL i wróć do tej operacji.', code: '', retryable: false, needFunds: true }, sheet: null });
+    const start = Date.now();
+    if (PAYMENTS === 'solana' && cfg.kind !== 'faucet' && this.bal() < FEE) {
+      this.setPh(k, { tx: { title: cfg.title, upload: false, start, phase: 'fail', failTitle: 'Brak salda na opłatę sieci', failText: 'Każda operacja kosztuje ułamek grosza (≈ 0.000005 SOL), także odbiór paczki. Doładuj testowe SOL i wróć do tej operacji.', code: '', retryable: false, needFunds: true }, sheet: null });
       return;
     }
-    this.setPh(k, { tx: { title: cfg.title, upload: !!cfg.upload, mb, start, phase: 'run' }, sheet: null });
-    const upMs = cfg.upload ? 2600 : 0;
-    const fm = this.takeFail(m => m === 'net' || (m === 'upload' && !!cfg.upload) || (m === 'program' && cfg.kind !== 'faucet'));
-    if (fm) {
-      let f, ms = upMs + 1700;
-      if (fm === 'upload') { f = ['Nie udało się wysłać nagrania', 'Połączenie zerwało się w trakcie wysyłania. Nagranie jest zapisane na telefonie, a umowa nie została zmieniona.', 'Błąd magazynu plików · przed operacją w sieci', true]; ms = 1500; }
-      else if (fm === 'program') { const p = PROG_FAIL[cfg.kind] || PROG_FAIL.def; f = [p[0], p[1], errCode(p[2]), p[3]]; }
-      else if (cfg.kind === 'faucet') f = ['Kran testowych SOL nie odpowiada', 'Publiczny kran sieci testowej ma limity. Spróbuj za minutę albo poproś zespół o przelew z portfela demo.', 'Limit zapytań kranu', true];
-      else f = ['Nie udało się – spróbuj ponownie', 'Sieć nie potwierdziła operacji na czas, więc ta próba wygasła. Twoje środki nie zostały pobrane, umowa jest bez zmian.' + (cfg.upload ? ' Nagranie jest już wysłane – nie trzeba go powtarzać.' : ''), 'Operacja wygasła przed potwierdzeniem', true];
-      if (cfg.upload && fm !== 'upload') this.pending[k] = { ...cfg, upload: false };
-      this.later(() => this.fail(k, ...f), ms);
-      return;
+    const stage = st => this.setPh(k, P => (P.tx && P.tx.phase === 'run' ? { tx: { ...P.tx, stage: st } } : {}));
+    this.setPh(k, { tx: { title: cfg.title, upload: !!cfg.upload, start, phase: 'run', stage: cfg.upload ? 'upload' : 'chain' }, sheet: null });
+    try {
+      const r = await perform(() => cfg.run(stage), {
+        sync: escrow.mode === 'solana' ? () => (cfg.dealPda ? chainSync(cfg.dealPda) : Promise.resolve()) : undefined,
+        refresh: () => this.refresh(),
+        onStage: s => { if (s === 'sync') stage('sync'); },
+      });
+      this.setPh(k, P => ({ tx: { ...P.tx, phase: 'ok', okTitle: cfg.ok[0], okText: cfg.ok[1], sig: r.signature, href: r.explorerUrl } }));
+      cfg.after?.();
+    } catch (e) {
+      const x = explain(e);
+      if (x.code === 'InvalidStatus' || x.code === 'DeadlinePassed') await this.refresh();
+      this.fail(k, x.title, x.text, x.code, x.retryable, x.code === 'InsufficientFunds' && PAYMENTS === 'solana');
     }
-    this.later(() => {
-      const now = this.now();
-      if (cfg.guard) {
-        const d = this.deal(cfg.guard.id);
-        if (d.status !== cfg.guard.status) return this.fail(k, 'Stan umowy już się zmienił', 'Ktoś inny wykonał ruch w tej umowie chwilę wcześniej. Pokazujemy aktualny stan.', errCode('InvalidStatus'), false);
-        if (cfg.guard.before && TO[d.status] && now >= d.changedAt + TO[d.status]) return this.fail(k, 'Termin minął', DEADLINE_MSG[d.status], errCode('DeadlinePassed'), false);
-      }
-      const sig = rnd(88);
-      this.setState(s => cfg.mutate(s, sig, now));
-      this.setPh(k, P => ({ tx: { ...P.tx, phase: 'ok', sig, okTitle: cfg.ok[0], okText: cfg.ok[1] } }));
-      if (cfg.notify) this.notify(cfg.notify[0], cfg.notify[1], cfg.notify[2]);
-      if (cfg.after) cfg.after(sig);
-    }, upMs + 2200);
+  }
+  async retry(k) {
+    const c = this.pending[k];
+    if (!c) return;
+    await this.refresh();
+    if (c.guard) {
+      const d = this.deal(c.guard.id);
+      if (!d || d.status !== c.guard.status) return this.fail(k, 'Stan umowy już się zmienił', 'Ktoś wykonał ruch w tej umowie chwilę wcześniej. Pokazujemy aktualny stan.', 'InvalidStatus', false);
+    }
+    this.tx(k, c);
   }
 
   buy(k, id) {
     const d = this.deal(id);
-    this.tx(k, { kind: 'buy', title: 'Zabezpieczamy środki w umowie…', guard: { id, status: 'Listed' }, mutate: (s, sig, now) => this.transition(s, id, 'Paid', { buyer: k }, sig, now),
-      ok: ['Środki zabezpieczone w umowie', d.price.toFixed(2) + ' SOL czeka w umowie. Sprzedający ma czas na nadanie do ok. ' + hhmm(this.now() + TO.Paid) + '.'],
-      notify: [d.seller, 'Nowy zakup: ' + d.title + '. Spakuj i nadaj paczkę.', id], after: () => this.setPh(k, { tab: 'deals', dealsTab: 'Zakupy', stack: [{ screen: 'deal', id }] }) });
+    this.tx(k, { kind: 'buy', title: 'Zabezpieczamy środki w umowie…', guard: { id, status: 'Listed' }, dealPda: d.pda, run: () => escrow.purchase(d.key),
+      ok: ['Środki zabezpieczone w umowie', money(d.price, d.currency) + ' czeka w umowie. Sprzedający ma czas na nadanie do ok. ' + hhmm(this.now() + TIMEOUTS_DEMO.Paid) + '.'],
+      after: () => this.setPh(k, { tab: 'deals', dealsTab: 'Zakupy', stack: [{ screen: 'deal', id }] }) });
   }
   publish(k) {
-    const f = this.state.phones[k].form, price = parseFloat(f.price.replace(',', '.'));
-    const id = 'n' + Date.now(), no = String(15 + this.state.deals.length).padStart(4, '0');
-    this.tx(k, { title: 'Zapisujemy ogłoszenie…', mutate: (s, sig, now) => ({ deals: [{ id, no, title: f.title, img: SELL_IMG[0], brand: f.brand || '—', size: f.size || '—', cond: ({ 'Nowy': 'Nowy z metką', 'B. dobry': 'Bardzo dobry' })[f.cond] || f.cond, cat: 'Inne', price, desc: f.title + '.', flaws: f.flaws, seller: k, buyer: null, status: 'Listed', changedAt: now, listingHash: rnd(44), pda: rnd(44), hidden: false, events: [{ st: 'Listed', label: '', at: now, sig }] }, ...s.deals] }),
-      ok: ['Ogłoszenie wystawione', 'Opis i lista wad są zapisane w umowie. Po zakupie nie da się ich zmienić.'], after: () => this.setPh(k, { tab: 'deals', dealsTab: 'Sprzedaże', stack: [{ screen: 'deal', id }] }) });
+    const f = this.state.phones[k].form, cur = PAYMENTS === 'solana' ? 'SOL' : 'PLN';
+    const pr = parsePrice(f.price, cur);
+    if ('error' in pr) return this.setPh(k, P => ({ form: { ...P.form, priceError: pr.error } }));
+    const categoryId = f.catId ?? this.state.cats[0]?.id ?? 'inne';
+    const cfg = { kind: 'publish', title: 'Zapisujemy ogłoszenie…', upload: f.photos.length > 0, newId: null, dealPda: null,
+      run: async stage => {
+        if (!cfg.newId) {   // a retry after a failed create_listing must not create a second listing
+          const photos = [];
+          for (const uri of f.photos) photos.push(await uploadPhoto(uri));
+          stage('chain');
+          const l = await createListing({ title: f.title.trim(), description: f.desc.trim(), categoryId, condition: CONDK[f.cond], brand: f.brand.trim(), size: f.size.trim(), defects: f.flaws, photos, priceMinor: pr.minor });
+          cfg.newId = l.id;
+        }
+        if (escrow.mode !== 'solana') return NONE;
+        return this.putOnChain(cfg, cfg.newId);
+      },
+      ok: ['Ogłoszenie wystawione', 'Opis i lista wad są zapisane w umowie. Po zakupie nie da się ich zmienić.'],
+      after: () => this.setPh(k, { tab: 'deals', dealsTab: 'Sprzedaże', stack: [{ screen: 'deal', id: cfg.newId }], form: freshForm() }) };
+    this.tx(k, cfg);
   }
-  cancel(k, id) { this.tx(k, { title: 'Anulujemy ogłoszenie…', guard: { id, status: 'Listed' }, mutate: (s, sig, now) => this.transition(s, id, 'Cancelled', {}, sig, now), ok: ['Ogłoszenie anulowane', 'Nikt nie zapłacił, nic nie zostało zablokowane.'] }); }
-  openPack(k, id, mode) { this.setPh(k, P => ({ pack: { qr: false, video: false, dur: '', tracking: '', mode }, stack: [...P.stack, { screen: 'pack', id }] })); }
+  /** publish (server freezes the text) → create_listing signed by the seller. Idempotent: an existing Deal account is just synced. */
+  async putOnChain(cfg, id) {
+    const args = await publishListing(id);
+    cfg.dealPda = args.deal;
+    const s = await chainSync(args.deal).catch(() => null);
+    if (s && s.published) return NONE;
+    return escrow.createListing(args);
+  }
+  publishOnChain(k, id) {
+    const cfg = { kind: 'publish', title: 'Zapisujemy ogłoszenie w umowie…', guard: { id, status: 'Listed' }, dealPda: null, run: () => this.putOnChain(cfg, id),
+      ok: ['Ogłoszenie zapisane w umowie', 'Opis i lista wad są zapisane w umowie. Po zakupie nie da się ich zmienić.'] };
+    this.tx(k, cfg);
+  }
+  cancel(k, id) {
+    const d = this.deal(id);
+    this.tx(k, { title: 'Anulujemy ogłoszenie…', guard: { id, status: 'Listed' }, dealPda: d.pda,
+      run: async () => (escrow.mode === 'solana' && !d.published ? (await cancelListingRest(id), NONE) : escrow.cancelListing(d.key)),
+      ok: ['Ogłoszenie anulowane', 'Nikt nie zapłacił, nic nie zostało zablokowane.'] });
+  }
+  async openPack(k, id, mode) {
+    const d = this.deal(id), kind = mode === 'return' ? 'return' : 'ship', key = 'unbox.card.' + id + '.' + kind;
+    this.setPh(k, P => ({ pack: { card: null, cardError: '', qr: false, video: false, uri: null, dur: '', tracking: '', mode }, stack: [...P.stack, { screen: 'pack', id }] }));
+    try {
+      let card = null;
+      const saved = await kv.get(key).catch(() => null);
+      if (saved) card = JSON.parse(saved);
+      if (!card) { card = await escrow.newQrCard(kind, d.key); await kv.set(key, JSON.stringify(card)).catch(() => {}); }
+      this.setPh(k, P => ({ pack: { ...P.pack, card } }));
+    } catch (e) {
+      this.setPh(k, P => ({ pack: { ...P.pack, cardError: explain(e).text } }));
+    }
+  }
+  async printPackCard(k, id) {
+    const P = this.state.phones[k], d = this.deal(id);
+    if (!P.pack.card) return;
+    try { await printCard(P.pack.card, d.title); } catch { /* cancelled print dialog: the card is still on screen */ }
+    this.setPh(k, Q => ({ pack: { ...Q.pack, qr: true } }));
+  }
   brief(k, mode, id) { this.go(k, 'brief', id, { mode }); }
-  startRec(k, mode, id) { this.setPh(k, P => ({ rec: { mode, id, start: Date.now() }, stack: [...P.stack.slice(0, -1), { screen: 'record', id }] })); }
-  stopRec(k) {
-    const r = this.state.phones[k].rec, el = Math.floor((Date.now() - r.start) / 1000), dur = '00:' + pad(Math.min(el, 119));
-    if (r.mode === 'unboxing' && this.fallbackQr()) this.setPh(k, Q => ({ rec: null, decide: { cat: null, text: '', dur }, scan: { id: r.id, start: Date.now(), mode: 'unbox' }, stack: [...Q.stack.slice(0, -1), { screen: 'scan', id: r.id }] }));
-    else if (r.mode === 'unboxing') this.setPh(k, Q => ({ rec: null, decide: { cat: null, text: '', dur }, stack: [...Q.stack.slice(0, -1), { screen: 'decide', id: r.id }] }));
-    else this.setPh(k, Q => ({ rec: null, pack: { ...Q.pack, video: true, dur }, stack: Q.stack.slice(0, -1) }));
+  startRec(k, mode, id) { this.setPh(k, P => ({ rec: { mode, id }, stack: [...P.stack.slice(0, -1), { screen: 'record', id }] })); }
+  recDone(k, uri, payload, secs) {
+    const r = this.state.phones[k].rec, dur = pad(Math.floor(secs / 60)) + ':' + pad(secs % 60);
+    if (!r) return;
+    if (r.mode === 'unboxing') {
+      this.setPh(k, Q => ({ rec: null, unbox: { uri, id: r.id }, decide: { cat: null, text: '', dur },
+        scan: payload ? { id: r.id, mode: 'unbox', payload } : { id: r.id, mode: 'unbox', payload: null },
+        stack: [...Q.stack.slice(0, -1), { screen: payload ? 'decide' : 'scan', id: r.id }] }));
+    } else {
+      this.setPh(k, Q => ({ rec: null, pack: { ...Q.pack, video: true, uri, dur }, stack: Q.stack.slice(0, -1) }));
+    }
+  }
+  startScan(k, id) { this.setPh(k, P => ({ scan: { id, mode: 'return', payload: null }, stack: [...P.stack, { screen: 'scan', id }] })); }
+  scanDone(k, payload) {
+    const S = this.state.phones[k].scan;
+    if (!S) return;
+    if (S.mode === 'unbox') this.setPh(k, Q => ({ scan: { ...S, payload }, stack: [...Q.stack.slice(0, -1), { screen: 'decide', id: S.id }] }));
+    else this.setPh(k, Q => ({ scan: { ...S, payload }, stack: Q.stack.slice(0, -1), sheet: 'ret' }));
   }
   submitPack(k, id) {
-    const P = this.state.phones[k], d = this.deal(id), isRet = P.pack.mode === 'return';
-    const extra = isRet ? { returnTracking: P.pack.tracking, retQr: rnd(44), retVideo: rnd(44) } : { tracking: P.pack.tracking, packHash: rnd(44), qrCommit: rnd(44) };
-    this.tx(k, { title: isRet ? 'Zapisujemy zwrot…' : 'Zapisujemy nadanie…', upload: true, guard: { id, status: d.status, before: true },
-      mutate: (s, sig, now) => this.transition(s, id, isRet ? 'Returning' : 'Shipped', extra, sig, now),
+    const P = this.state.phones[k], d = this.deal(id), pk = P.pack, isRet = pk.mode === 'return', tracking = pk.tracking.trim();
+    this.tx(k, { kind: 'pack', title: isRet ? 'Zapisujemy zwrot…' : 'Zapisujemy nadanie…', upload: true, guard: { id, status: d.status }, dealPda: d.pda,
+      run: async stage => {
+        const video = await uploadRecording(pk.uri);
+        stage('chain');
+        return isRet
+          ? escrow.markReturned(d.key, { returnQrCommitment: pk.card.commitment, returnVideoSha256: video, trackingNumber: tracking })
+          : escrow.markShipped(d.key, { qrCommitment: pk.card.commitment, packingVideoSha256: video, trackingNumber: tracking });
+      },
       ok: isRet ? ['Zwrot nadany', 'Gdy sprzedający zeskanuje kod zwrotu, środki wrócą do Ciebie. Jeśli tego nie zrobi, wrócą po terminie.'] : ['Paczka nadana', 'Nagranie i numer przesyłki są zapisane w umowie. Kupujący ma czas na otwarcie i decyzję.'],
-      notify: isRet ? [d.seller, 'Zwrot w drodze: ' + d.title + '. Po odbiorze zeskanuj kod zwrotu.', id] : [d.buyer, 'Paczka nadana: ' + d.title + '. Po odbiorze nagraj otwarcie.', id],
-      after: () => this.setPh(k, { tab: 'deals', stack: [{ screen: 'deal', id }] }) });
+      after: () => { kv.del('unbox.card.' + id + '.' + (isRet ? 'return' : 'ship')).catch(() => {}); this.setPh(k, { tab: 'deals', stack: [{ screen: 'deal', id }] }); } });
   }
   accept(k, id) {
-    const d = this.deal(id);
-    this.tx(k, { kind: 'qr', title: 'Przekazujemy środki sprzedającemu…', guard: { id, status: 'Shipped', before: true }, mutate: (s, sig, now) => this.transition(s, id, 'Completed', {}, sig, now, 'Odebrane – wszystko OK'),
-      ok: [d.price.toFixed(2) + ' SOL u sprzedającego', 'Umowa jest zamknięta. Nagranie otwarcia zostało tylko na Twoim telefonie.'],
-      notify: [d.seller, 'Odbiór potwierdzony: ' + d.title + '. Środki są na Twoim saldzie.', id], after: () => this.setPh(k, { tab: 'deals', stack: [{ screen: 'deal', id }] }) });
+    const d = this.deal(id), payload = this.state.phones[k].scan?.payload;
+    this.tx(k, { kind: 'qr', title: 'Przekazujemy środki sprzedającemu…', guard: { id, status: 'Shipped' }, dealPda: d.pda, run: () => escrow.acceptDelivery(d.key, payload),
+      ok: [money(d.price, d.currency) + ' u sprzedającego', 'Umowa jest zamknięta. Nagranie otwarcia zostało tylko na Twoim urządzeniu.'],
+      after: () => this.setPh(k, { tab: 'deals', stack: [{ screen: 'deal', id }], unbox: null, scan: null }) });
   }
   complain(k, id) {
-    const d = this.deal(id), c = this.state.phones[k].decide;
-    this.tx(k, { kind: 'qr', title: 'Wysyłamy reklamację…', upload: true, guard: { id, status: 'Shipped', before: true },
-      mutate: (s, sig, now) => this.transition(s, id, 'Disputed', { unboxHash: rnd(44), complaintHash: rnd(44), complaint: { cat: c.cat, text: c.text } }, sig, now),
-      ok: ['Reklamacja zgłoszona', 'AI porówna oba nagrania z opisem. Środki zostają w umowie do czasu oceny.'],
-      notify: [d.seller, 'Reklamacja: ' + d.title + '. AI ocenia oba nagrania.', id], after: () => { this.setPh(k, { tab: 'deals', stack: [{ screen: 'deal', id }] }); this.oracle(id); } });
+    const d = this.deal(id), P = this.state.phones[k], c = P.decide, payload = P.scan?.payload, uri = P.unbox?.uri;
+    const complaint = { category: CAT_KEY[c.cat], description: c.text.trim().length >= 3 ? c.text.trim() : c.cat };
+    this.tx(k, { kind: 'qr', title: 'Wysyłamy reklamację…', upload: true, guard: { id, status: 'Shipped' }, dealPda: d.pda,
+      run: async stage => {
+        const unboxingVideoSha256 = await uploadRecording(uri);
+        const complaintSha256 = await uploadJson(JSON.stringify({ v: 1, ...complaint, created_at: this.now() }));
+        stage('chain');
+        return escrow.openDispute(d.key, { qrPayload: payload, unboxingVideoSha256, complaint, complaintSha256 });
+      },
+      ok: ['Reklamacja zgłoszona', 'Weryfikator AI porówna oba nagrania z opisem. Środki zostają w umowie do czasu oceny.'],
+      after: () => this.setPh(k, { tab: 'deals', stack: [{ screen: 'deal', id }], unbox: null, scan: null }) });
   }
-  oracle(id) {
-    this.later(() => {
-      const d = this.deal(id);
-      if (!d || d.status !== 'Disputed') return;
-      const sig = rnd(88), win = d.hidden, now = this.now();
-      this.setState(s => this.transition(s, id, win ? 'ReturnRequested' : 'Completed', { verdict: win ? 'Buyer' : 'Seller', reportHash: rnd(44) }, sig, now, win ? 'Ocena AI: reklamacja uznana' : 'Ocena AI: reklamacja odrzucona'));
-      const t = (win ? 'Reklamacja uznana: ' : 'Reklamacja odrzucona: ') + d.title + '.';
-      this.notify(d.buyer, t, id); this.notify(d.seller, t, id);
-    }, (this.props.aiDelay ?? 5) * 1000);
-  }
-  startScan(k, id) { this.setPh(k, P => ({ scan: { id, start: Date.now() }, stack: [...P.stack, { screen: 'scan', id }] })); }
   confirmReturn(k, id) {
-    const d = this.deal(id);
-    this.tx(k, { kind: 'qr', title: 'Zwracamy środki kupującemu…', guard: { id, status: 'Returning' }, mutate: (s, sig, now) => this.transition(s, id, 'Refunded', {}, sig, now, 'Zwrot odebrany'),
-      ok: ['Środki zwrócone kupującemu', d.price.toFixed(2) + ' SOL wróciło do kupującego. Umowa jest zamknięta.'],
-      notify: [d.buyer, 'Zwrot potwierdzony: ' + d.title + '. Środki wróciły na Twoje saldo.', id], after: () => this.setPh(k, { scan: null, tab: 'deals', stack: [{ screen: 'deal', id }] }) });
+    const d = this.deal(id), payload = this.state.phones[k].scan?.payload;
+    this.tx(k, { kind: 'qr', title: 'Zwracamy środki kupującemu…', guard: { id, status: 'Returning' }, dealPda: d.pda, run: () => escrow.confirmReturn(d.key, payload),
+      ok: ['Środki zwrócone kupującemu', money(d.price, d.currency) + ' wróciło do kupującego. Umowa jest zamknięta.'],
+      after: () => this.setPh(k, { scan: null, tab: 'deals', stack: [{ screen: 'deal', id }] }) });
   }
   settle(k, id) {
-    const d = this.deal(id), to = SETTLE[d.status], other = k === d.buyer ? d.seller : d.buyer;
+    const d = this.deal(id), to = SETTLE_TO[d.status];
     const msg = { Refunded: 'Środki zwrócone kupującemu', Completed: 'Środki u sprzedającego', ReturnRequested: 'Kupujący odsyła paczkę za zwrot' }[to];
-    this.tx(k, { kind: 'settle', title: 'Zamykamy sprawę po terminie…', guard: { id, status: d.status }, mutate: (s, sig, now) => this.transition(s, id, to, to === 'ReturnRequested' ? { noVerdict: true } : {}, sig, now, 'Termin minął – zamknęła/zamknął: ' + USERS[k].name),
-      ok: [msg, 'Nikt nie musiał się zgodzić. Umowa wykonała regułę po terminie.'], notify: [other, 'Termin minął: ' + d.title + '. ' + msg + '.', id] });
+    this.tx(k, { kind: 'settle', title: 'Zamykamy sprawę po terminie…', guard: { id, status: d.status }, dealPda: d.pda, run: () => escrow.settleExpired(d.key),
+      ok: [msg, 'Nikt nie musiał się zgodzić. Umowa wykonała regułę po terminie.'] });
   }
   faucet(k) {
-    this.tx(k, { kind: 'faucet', title: 'Pobieramy testowe SOL…', mutate: s => ({ balances: { ...s.balances, [k]: s.balances[k] + 1 }, history: { ...s.history, [k]: [{ label: 'Doładowanie testowe', amt: 1, in: true }, ...s.history[k]] } }), ok: ['Doładowano 1.000 SOL', 'To testowe SOL z sieci deweloperskiej, bez wartości.'] });
+    this.tx(k, { kind: 'faucet', title: 'Pobieramy testowe SOL…', run: () => escrow.requestTestSol(), ok: ['Doładowano 1.000 SOL', 'To testowe SOL z sieci deweloperskiej, bez wartości.'] });
   }
-  setForm(k, field) { return e => { const v = e.target.value; this.setPh(k, P => ({ form: { ...P.form, [field]: v } })); }; }
+  setForm(k, field) { return e => { const v = e.target.value; this.setPh(k, P => ({ form: { ...P.form, [field]: v, ...(field === 'price' ? { priceError: '' } : {}) } })); }; }
 
+  // ---------- view models ----------
   dv(d, me) {
-    const now = this.now(), showIds = this.props.showStateIds ?? true;
+    const now = this.now();
     const iB = d.buyer === me, iS = d.seller === me;
-    const sN = USERS[d.seller].name, bN = d.buyer ? USERS[d.buyer].name : '';
-    const deadline = TO[d.status] ? d.changedAt + TO[d.status] : null;
+    const sN = d.sellerName, bN = d.buyerName;
+    const deadline = ESCROW.includes(d.status) ? d.deadlineAt : null;
     const remain = deadline !== null ? deadline - now : null;
     const expired = remain !== null && remain <= 0;
     const unlocked = remain !== null && remain <= -GRACE;
     const benefRole = BENEF[d.status], benef = benefRole === 'buyer' ? d.buyer : benefRole === 'seller' ? d.seller : null;
-    const can = !!SETTLE[d.status];
-    const who = ({ Listed: 'Czeka na kupującego', Paid: iS ? 'Ty – spakuj i nadaj paczkę' : 'Sprzedający (' + sN + ') – nadaje paczkę', Shipped: iB ? 'Ty – nagraj otwarcie i zdecyduj' : 'Kupujący (' + bN + ') – nagrywa otwarcie', Disputed: 'Niezależna ocena AI – porównuje oba nagrania', ReturnRequested: iB ? 'Ty – odeślij paczkę' : 'Kupujący (' + bN + ') – odsyła paczkę', Returning: iS ? 'Ty – zeskanuj kod zwrotu' : 'Sprzedający (' + sN + ') – potwierdza odbiór zwrotu' })[d.status] || '';
+    const can = !!SETTLE_TO[d.status];
+    const who = ({ Listed: d.published ? 'Czeka na kupującego' : 'Ty – zapisz ogłoszenie w umowie', Paid: iS ? 'Ty – spakuj i nadaj paczkę' : 'Sprzedający (' + sN + ') – nadaje paczkę', Shipped: iB ? 'Ty – nagraj otwarcie i zdecyduj' : 'Kupujący (' + bN + ') – nagrywa otwarcie', Disputed: 'Weryfikator AI – porównuje oba nagrania', ReturnRequested: iB ? 'Ty – odeślij paczkę' : 'Kupujący (' + bN + ') – odsyła paczkę', Returning: iS ? 'Ty – zeskanuj kod zwrotu' : 'Sprzedający (' + sN + ') – potwierdza odbiór zwrotu' })[d.status] || '';
     const after = ({ Listed: 'Ogłoszenie czeka. Możesz je anulować, dopóki nikt nie zapłacił.', Paid: 'Po terminie każdy może zwrócić środki kupującemu.', Shipped: 'Po terminie środki trafią do sprzedającego.', Disputed: 'Po terminie kupujący odsyła paczkę za zwrot środków.', ReturnRequested: 'Po terminie środki trafią do sprzedającego.', Returning: 'Po terminie środki wrócą do kupującego.' })[d.status] || '';
-    const priceText = d.price.toFixed(2);
+    const priceText = money(d.price, d.currency);
     let hint = null;
     if (can && unlocked && benef === me) hint = 'Odbierz środki';
     else if (!expired) {
       if (iB) hint = { Shipped: 'Nagraj otwarcie', ReturnRequested: 'Spakuj zwrot' }[d.status] || null;
       if (iS) hint = { Paid: 'Spakuj i nadaj', Returning: 'Zeskanuj kod zwrotu' }[d.status] || hint;
     }
+    if (iS && d.status === 'Listed' && !d.published && PAYMENTS === 'solana') hint = 'Zapisz w umowie';
     let nSecured = false, nNeutral = false, nTitle = '', nText = '';
-    if (d.status === 'Completed') { nSecured = true; nTitle = iS ? 'Środki są na Twoim saldzie' : 'Zakończone'; nText = priceText + ' SOL trafiło do sprzedającego. Umowa jest zamknięta.'; }
-    if (d.status === 'Refunded') { nSecured = true; nTitle = iB ? 'Środki wróciły na Twoje saldo' : 'Środki zwrócone kupującemu'; nText = priceText + ' SOL zwróciła umowa, bez niczyjej zgody.'; }
+    if (d.status === 'Completed') { nSecured = true; nTitle = iS ? 'Środki są na Twoim saldzie' : 'Zakończone'; nText = priceText + ' trafiło do sprzedającego. Umowa jest zamknięta.'; }
+    if (d.status === 'Refunded') { nSecured = true; nTitle = iB ? 'Środki wróciły na Twoje saldo' : 'Środki zwrócone kupującemu'; nText = priceText + ' zwróciła umowa, bez niczyjej zgody.'; }
     if (d.status === 'Cancelled') { nNeutral = true; nTitle = 'Ogłoszenie anulowane'; nText = 'Nikt nie zapłacił, nic nie zostało zablokowane.'; }
-    if (d.status === 'Disputed' && !expired) { nNeutral = true; nTitle = 'AI porównuje oba nagrania'; nText = 'Nagranie pakowania, nagranie otwarcia, opis i reklamację. Wynik wyliczy jawna reguła.'; }
+    if (d.status === 'Disputed' && !expired) {
+      nNeutral = true;
+      if (d.analysis && d.analysis.status === 'failed') { nTitle = 'Ocena nie powiodła się'; nText = 'Po terminie oceny kupujący odsyła paczkę za zwrot środków.'; }
+      else { nTitle = 'Weryfikator AI porównuje oba nagrania'; nText = 'Nagranie pakowania, nagranie otwarcia, opis i reklamację. Wynik wyliczy jawna reguła.'; }
+    }
     if (d.status === 'ReturnRequested' && d.noVerdict) { nNeutral = true; nTitle = 'Brak oceny w terminie'; nText = 'Umowa przeszła na neutralną ścieżkę: kupujący odsyła paczkę za zwrot środków.'; }
     const final = !FUT[d.status];
-    const nodes = d.events.map((e, i) => ({ st: e.st, sub: e.label, when: stamp(e.at), sig: e.sig, state: i === d.events.length - 1 && !final ? 'current' : 'done' }));
-    (FUT[d.status] || []).forEach(st => nodes.push({ st, sub: '', when: 'później', sig: null, state: 'todo' }));
+    const nodes = d.events.map((e, i) => ({ st: e.st, sub: e.label, when: stamp(e.at), href: e.href, state: i === d.events.length - 1 && !final ? 'current' : 'done' }));
+    (FUT[d.status] || []).forEach(st => nodes.push({ st, sub: '', when: 'później', href: null, state: 'todo' }));
     const timeline = nodes.map((n, i) => {
       const c = n.state === 'done' ? 'var(--success)' : n.state === 'current' ? 'var(--warning)' : 'var(--line-strong)';
       const when = n.state === 'current' && deadline !== null ? n.when + ' · termin ok. ' + hhmm(deadline) : n.when;
-      return { label: STATUS[n.st][0], id: n.st, showId: showIds, sub: n.sub, hasSub: !!n.sub, when, color: c, fill: n.state === 'todo' ? 'transparent' : c, line: n.state === 'done' ? 'var(--success)' : 'var(--line)',
-        labelColor: n.state === 'todo' ? 'var(--fg-3)' : 'var(--fg-1)', weight: n.state === 'current' ? 700 : 500, notLast: i < nodes.length - 1, hasSig: !!n.sig, href: n.sig ? EXPL(n.sig) : '#',
+      return { label: STATUS[n.st][0], id: n.st, showId: true, sub: n.sub, hasSub: !!n.sub, when, color: c, fill: n.state === 'todo' ? 'transparent' : c, line: n.state === 'done' ? 'var(--success)' : 'var(--line)',
+        labelColor: n.state === 'todo' ? 'var(--fg-3)' : 'var(--fg-1)', weight: n.state === 'current' ? 700 : 500, notLast: i < nodes.length - 1, hasSig: !!n.href, href: n.href || '#',
         alt: n.state !== 'done' ? ALT[n.st] || '' : '', hasAlt: n.state !== 'done' && !!ALT[n.st] };
     });
-    const evidence = [{ label: 'Opis i zdjęcia ogłoszenia', value: short(d.listingHash) }];
-    if (d.buyer) evidence.push({ label: 'Zaakceptowany arbiter', value: short(ARBITER) });
+    const evidence = [];
+    if (d.listingHash) evidence.push({ label: 'Opis i zdjęcia ogłoszenia', value: short(d.listingHash) });
+    if (d.buyer && PAYMENTS === 'solana' && ARBITER) evidence.push({ label: 'Zaakceptowany weryfikator', value: short(ARBITER) });
     if (d.tracking) evidence.push({ label: 'Nagranie pakowania', value: short(d.packHash) }, { label: 'Karta z kodem', value: short(d.qrCommit) }, { label: 'Numer przesyłki', value: d.tracking });
     if (d.unboxHash) evidence.push({ label: 'Nagranie otwarcia', value: short(d.unboxHash) }, { label: 'Reklamacja · ' + ((d.complaint && d.complaint.cat) || ''), value: short(d.complaintHash) });
     if (d.reportHash) evidence.push({ label: 'Raport oceny AI', value: short(d.reportHash) });
     if (d.returnTracking) evidence.push({ label: 'Nagranie zwrotu', value: short(d.retVideo) }, { label: 'Karta zwrotu', value: short(d.retQr) }, { label: 'Przesyłka zwrotna', value: d.returnTracking });
-    const lastSig = d.events[d.events.length - 1].sig;
+    const last = [...d.events].reverse().find(e => e.href);
+    const href = last ? last.href : d.pda && d.published ? ADDR(d.pda) : null;
     const mineB = benef === me;
+    const settleLabel = d.status === 'Disputed' ? 'Przejdź do zwrotu' : mineB ? 'Odbierz środki' : benefRole === 'buyer' ? 'Zwróć środki kupującemu' : 'Przekaż środki sprzedającemu';
     return {
-      id: d.id, no: d.no, title: d.title, img: d.img, priceText, zl: this.zl(d.price), statusLabel: STATUS[d.status][0], statusColor: STATUS[d.status][1],
+      id: d.id, no: d.no, title: d.title, photo: d.photos[0] || null, priceText, zl: this.zl(d.price, d.currency), statusLabel: STATUS[d.status][0], statusColor: STATUS[d.status][1],
       parties: d.buyer ? (iS ? 'Kupuje: ' + bN : 'Sprzedaje: ' + sN) : 'Sprzedaje: ' + sN,
       hint, hasHint: !!hint, isActive: ESCROW.includes(d.status) || d.status === 'Listed',
-      funds: d.status === 'Listed' ? 'Nikt jeszcze nie zapłacił' : 'Zabezpieczone w umowie · ' + priceText + ' SOL (≈ ' + this.zl(d.price) + ')', fundsColor: d.status === 'Listed' ? 'var(--fg-2)' : 'var(--secured)', who, after,
+      funds: d.status === 'Listed' ? 'Nikt jeszcze nie zapłacił' : 'Zabezpieczone w umowie · ' + priceText + (this.zl(d.price, d.currency) ? ' (≈ ' + this.zl(d.price, d.currency) + ')' : ''), fundsColor: d.status === 'Listed' ? 'var(--fg-2)' : 'var(--secured)', who, after,
       hasDeadline: deadline !== null, countdown: expired ? '00:00:00' : hms(remain || 0), cdColor: remain !== null && remain <= 60 ? 'var(--warning)' : 'var(--fg-1)',
       cdWhen: deadline === null ? '' : (expired ? 'Termin minął ok. ' : 'Termin ok. ') + hhmm(deadline) + ' · liczy go sieć, nie telefon',
       cardBorder: can && expired ? 'var(--warning)' : 'var(--line-strong)',
       settleLocked: can && !expired && mineB, settleChecking: can && expired && !unlocked, settleMine: can && unlocked && mineB, settleOther: can && unlocked && !mineB,
-      settleLabel: mineB ? 'Odbierz środki' : 'Zamknij sprawę po terminie', outcome: OUTCOME[d.status] || '',
+      settleLabel, outcome: OUTCOME[d.status] || '',
       actRecord: iB && d.status === 'Shipped' && !expired, actShip: iS && d.status === 'Paid' && !expired, actReturn: iB && d.status === 'ReturnRequested' && !expired, actScan: iS && d.status === 'Returning' && !expired,
-      actCancel: iS && d.status === 'Listed', hasVerdict: !!d.verdict, nSecured, nNeutral, nTitle, nText, timeline, evidence, href: EXPL(lastSig),
+      actCancel: iS && d.status === 'Listed', actPublish: iS && d.status === 'Listed' && !d.published && PAYMENTS === 'solana',
+      hasVerdict: !!d.verdict, nSecured, nNeutral, nTitle, nText, timeline, evidence, href, hasHref: !!href,
       settle: () => this.settle(me, d.id), record: () => this.brief(me, 'unboxing', d.id), shipFlow: () => this.openPack(me, d.id, 'ship'), returnFlow: () => this.openPack(me, d.id, 'return'),
-      scan: () => this.startScan(me, d.id), verdict: () => this.go(me, 'verdict', d.id), cancel: () => this.cancel(me, d.id), open: () => this.go(me, 'deal', d.id),
+      scan: () => this.startScan(me, d.id), verdict: () => this.go(me, 'verdict', d.id), cancel: () => this.cancel(me, d.id), publish: () => this.publishOnChain(me, d.id), open: () => this.go(me, 'deal', d.id),
     };
   }
 
   vm(k) {
-    const s = this.state, P = s.phones[k], u = USERS[k], now = this.now();
+    const s = this.state, P = s.phones[k], me = s.me, now = this.now(), cur = this.cur();
     const top = P.stack[P.stack.length - 1];
     const scr = P.onb ? 'onb_' + P.onb : top ? top.screen : P.tab;
-    const bal = s.balances[k];
+    const bal = this.bal();
     const v = {
-      caption: ROLE[k].caption, roleLabel: ROLE[k].label, roleBg: ROLE[k].bg, clock: hhmm(now), balance: bal.toFixed(3), balanceZl: this.zl(bal), feeZl: this.zl(FEE), addrShort: short(u.addr), arbiterShort: short(ARBITER),
-      sOnbWelcome: scr === 'onb_welcome', sOnbCreating: scr === 'onb_creating', sOnbReady: scr === 'onb_ready', sBrowse: scr === 'browse', sListing: scr === 'listing', sSell: scr === 'sell', sDeals: scr === 'deals', sDeal: scr === 'deal',
-      sBrief: scr === 'brief', sPack: scr === 'pack', sCamera: scr === 'record' || scr === 'scan', sDecide: scr === 'decide', sVerdict: scr === 'verdict', sWallet: scr === 'wallet',
-      back: () => this.back(k), faucet: () => this.faucet(k), lowBal: bal < 0.001,
-      onbStart: () => { this.setPh(k, { onb: 'creating' }); this.later(() => this.setPh(k, { onb: 'ready' }), 1400); },
-      onbDone: () => { this.setPh(k, { onb: null, tab: 'browse', stack: [] }); this.loadFeed(k); },
-      reload: () => this.loadFeed(k), openDev: () => this.setPh(k, { sheet: 'dev' }),
+      caption: me ? me.name : '', roleLabel: me ? me.name : 'Sellsor', modeLabel: PAYMENTS === 'solana' ? 'devnet' : 'demo',
+      roleBg: P.tab === 'deals' && P.dealsTab === 'Sprzedaże' ? '#FFB547' : '#9945FF', clock: hhmm(now), balance: money(bal, cur), balanceZl: this.zl(bal, cur), feeZl: this.zl(FEE, 'SOL'),
+      addrShort: s.wallet?.address ? short(s.wallet.address) : PAYMENTS === 'solana' ? 'portfel niepołączony' : 'tryb demo – saldo prowadzi serwer', address: s.wallet?.address || '',
+      arbiterShort: ARBITER ? short(ARBITER) : '', solana: PAYMENTS === 'solana', web: WEB, linkError: s.linkError || '',
+      sOnbLoading: scr === 'onb_loading', sOnbWelcome: scr === 'onb_welcome', sOnbCreating: scr === 'onb_creating', sOnbReady: scr === 'onb_ready', sBrowse: scr === 'browse', sListing: scr === 'listing', sSell: scr === 'sell', sDeals: scr === 'deals', sDeal: scr === 'deal',
+      sBrief: scr === 'brief', sPack: scr === 'pack', sRecord: scr === 'record', sScan: scr === 'scan', sPhoto: scr === 'photo', sDecide: scr === 'decide', sVerdict: scr === 'verdict', sWallet: scr === 'wallet',
+      back: () => this.back(k), faucet: () => this.faucet(k), lowBal: PAYMENTS === 'solana' && !!s.wallet && bal < 0.001,
+      onbDone: () => { this.setPh(k, { onb: null, tab: 'browse', stack: [] }); this.refresh(); },
+      reload: () => { this.setPh(k, { feed: 'loading' }); this.refresh(); }, openDev: () => this.setPh(k, { sheet: 'dev' }),
     };
+    v.sCamera = v.sRecord || v.sScan || v.sPhoto;
+    v.login = { email: P.login.email, password: P.login.password, error: P.login.error, hasError: !!P.login.error,
+      setEmail: t => this.setPh(k, Q => ({ login: { ...Q.login, email: t } })), setPassword: t => this.setPh(k, Q => ({ login: { ...Q.login, password: t } })),
+      submit: () => this.login(P.login.email, P.login.password), quick: QUICK.map(([email, label]) => ({ label, go: () => this.login(email, 'demo1234') })) };
     v.showTabs = !P.onb && (!top || top.screen === 'deal');
     const anyHint = s.deals.filter(d => d.buyer === k || d.seller === k).some(d => this.dv(d, k).hasHint);
     v.tabs = TABS.map(([id, ic, label]) => ({ label, icon: ICON(ic), color: id === P.tab ? 'var(--fg-1)' : 'var(--fg-3)', badge: id === 'deals' && anyHint, go: () => this.tab(k, id) }));
-    v.feedLoading = P.feed === 'loading'; v.feedError = P.feed === 'error'; v.feedOk = P.feed === 'ok';
+    v.feedLoading = P.feed === 'loading'; v.feedError = P.feed === 'error'; v.feedOk = P.feed === 'ok'; v.feedErrorText = P.feedError || 'Serwer chwilowo nie odpowiada. Twoje środki i umowy są bez zmian.';
     if (scr === 'browse') {
       const F = P.filt, q = norm(F.q.trim());
       const setF = patch => this.setPh(k, Q => ({ filt: { ...Q.filt, ...(typeof patch === 'function' ? patch(Q.filt) : patch) } }));
       const tog = (arr, x) => (arr.includes(x) ? arr.filter(y => y !== x) : [...arr, x]);
-      const list = s.deals.filter(d => d.status === 'Listed' && d.seller !== k && (F.cat === 'Wszystko' || d.cat === F.cat) && (!q || norm(d.title + ' ' + d.brand + ' ' + (d.cat || '')).includes(q)) && (!F.sizes.length || F.sizes.includes(d.size)) && (!F.conds.length || F.conds.includes(d.cond)) && (F.max >= PRICE_MAX || d.price <= F.max + 1e-9) && (!F.noFlaws || !d.flaws.length));
+      const list = s.deals.filter(d => d.status === 'Listed' && d.published && d.seller !== k && (F.cat === 'Wszystko' || d.cat === F.cat) && (!q || norm(d.title + ' ' + d.brand + ' ' + (d.cat || '')).includes(q)) && (!F.sizes.length || F.sizes.includes(d.size)) && (!F.conds.length || F.conds.includes(d.cond)) && (F.max >= PRICE_MAX || d.price <= F.max + 1e-9) && (!F.noFlaws || !d.flaws.length));
       list.sort((a, b) => (F.sort === 'cheap' ? a.price - b.price : F.sort === 'exp' ? b.price - a.price : b.changedAt - a.changedAt));
-      v.feed = list.map(d => ({ title: d.title, img: d.img, priceText: d.price.toFixed(2), zl: this.zl(d.price), meta: d.size + ' · ' + d.cond, cat: d.cat || 'foto', open: () => this.go(k, 'listing', d.id) }));
+      v.feed = list.map(d => ({ id: d.id, title: d.title, priceText: money(d.price, d.currency), zl: this.zl(d.price, d.currency), meta: d.size + ' · ' + d.cond, cat: d.cat || 'foto', photo: d.photos[0] || null, open: () => this.go(k, 'listing', d.id) }));
       v.feedEmpty = list.length === 0; v.resultsLabel = list.length + ' ' + plural(list.length); v.sortLabel = SORTS.find(x => x[0] === F.sort)[1];
       v.q = F.q; v.hasQ = !!F.q; v.setQ = e => { const val = e.target.value; setF({ q: val }); }; v.clearQ = () => setF({ q: '' });
       const chip = (on, pick, label) => ({ label, pick, bg: on ? 'var(--fg-1)' : 'transparent', fg: on ? 'var(--ink-950)' : 'var(--fg-2)', border: on ? 'var(--fg-1)' : 'var(--line-strong)' });
-      v.cats = ['Wszystko', ...CATEGORIES.map(c => c[0])].map(c => chip(F.cat === c, () => setF({ cat: c }), c));
+      v.cats = ['Wszystko', ...s.cats.map(c => c.name)].map(c => chip(F.cat === c, () => setF({ cat: c }), c));
       const fCount = (F.sizes.length ? 1 : 0) + (F.conds.length ? 1 : 0) + (F.max < PRICE_MAX ? 1 : 0) + (F.noFlaws ? 1 : 0);
       v.fCount = fCount; v.hasFCount = fCount > 0; v.fBorder = fCount ? 'var(--accent)' : 'var(--line-strong)';
       v.openFilters = () => this.setPh(k, { sheet: 'filters' });
       v.fSizes = SIZE_OPTS.map(x => chip(F.sizes.includes(x), () => setF(G => ({ sizes: tog(G.sizes, x) })), x));
       v.fConds = FCONDS.map(x => chip(F.conds.includes(x), () => setF(G => ({ conds: tog(G.conds, x) })), x));
       v.fSorts = SORTS.map(([id, l]) => chip(F.sort === id, () => setF({ sort: id }), l));
-      v.fMax = F.max; v.fMaxText = F.max >= PRICE_MAX ? 'Bez limitu' : 'do ' + F.max.toFixed(2) + ' SOL · ≈ ' + this.zl(F.max);
+      v.fPrice = cur === 'SOL'; v.fMax = F.max; v.fMaxText = F.max >= PRICE_MAX ? 'Bez limitu' : 'do ' + F.max.toFixed(2) + ' SOL · ≈ ' + this.zl(F.max, 'SOL');
       v.setFMax = e => { const val = parseFloat(e.target.value); setF({ max: val }); };
       v.toggleNoFlaws = () => setF(G => ({ noFlaws: !G.noFlaws })); v.swBg = F.noFlaws ? 'var(--accent)' : 'var(--line-strong)'; v.swX = F.noFlaws ? '23px' : '3px';
       v.fResults = 'Pokaż ' + list.length + ' ' + plural(list.length);
@@ -405,129 +466,137 @@ export class AppProvider extends React.Component<any, any> {
     if (top && top.id) {
       const d = this.deal(top.id);
       if (d) {
-        v.L = { title: d.title, img: d.img, brandLine: d.brand + ' · ' + d.size + ' · ' + d.cond, desc: d.desc, flaws: d.flaws, flawsCount: d.flaws.length, noFlaws: d.flaws.length === 0, priceText: d.price.toFixed(2), zl: this.zl(d.price),
-          sellerLine: USERS[d.seller].name + ' · ' + short(USERS[d.seller].addr), isOwn: d.seller === k, notOwn: d.seller !== k, shipBy: hhmm(now + TO.Paid), short: bal < d.price, buyOpacity: bal < d.price ? 0.4 : 1 };
+        const cb = me ? canBuy(me, PAYMENTS, s.linkError) : { ok: false, reason: '' }, short_ = bal < d.price;
+        v.L = { title: d.title, photo: d.photos[0] || null, photoLabel: d.photos.length ? '' : 'brak zdjęć', brandLine: d.brand + ' · ' + d.size + ' · ' + d.cond + ' · ' + d.cat, desc: d.desc, flaws: d.flaws, flawsCount: d.flaws.length, noFlaws: d.flaws.length === 0,
+          priceText: money(d.price, d.currency), zl: this.zl(d.price, d.currency),
+          sellerLine: d.sellerName + (d.sellerWallet ? ' · ' + short(d.sellerWallet) : ''), isOwn: d.seller === k, notOwn: d.seller !== k, shipBy: hhmm(now + TIMEOUTS_DEMO.Paid),
+          short: short_, blocked: !cb.ok, blockedReason: cb.reason };
         v.D = this.dv(d, k);
         v.openBuy = () => this.setPh(k, { sheet: 'buy', rulesOpen: false });
-        v.buy = () => { if (this.state.balances[k] >= d.price) this.buy(k, d.id); };
+        v.buy = () => { if (!short_ && cb.ok) this.buy(k, d.id); };
         if (scr === 'brief') { const b = BRIEF[top.mode]; v.B = { title: b.title, warning: b.warning, items: b.items.map((t, i) => ({ n: pad(i + 1), text: t })), go: () => this.startRec(k, top.mode, d.id) }; }
         if (scr === 'pack') {
-          const pk = P.pack, isRet = pk.mode === 'return', okT = pk.tracking.replace(/\s/g, '').length >= 6, can = pk.qr && pk.video && okT;
-          const stp = (done, cur) => ({ b: done ? 'var(--secured)' : cur ? 'var(--fg-1)' : 'var(--line-strong)', bg: done ? 'var(--secured)' : 'transparent', fg: done ? 'var(--ink-950)' : cur ? 'var(--fg-1)' : 'var(--fg-3)' });
+          const pk = P.pack, isRet = pk.mode === 'return', tr = pk.tracking.trim(), okT = tr.replace(/\s/g, '').length >= 3 && tr.length <= 32, can = !!pk.card && pk.qr && pk.video && okT;
+          const stp = (done, cur_) => ({ b: done ? 'var(--secured)' : cur_ ? 'var(--fg-1)' : 'var(--line-strong)', bg: done ? 'var(--secured)' : 'transparent', fg: done ? 'var(--ink-950)' : cur_ ? 'var(--fg-1)' : 'var(--fg-3)' });
           const a = stp(pk.qr, !pk.qr), b = stp(pk.video, pk.qr && !pk.video), c = stp(okT, pk.qr && pk.video);
-          const dl = TO[d.status] ? d.changedAt + TO[d.status] : now;
+          const dl = d.deadlineAt || now;
           v.K = { title: isRet ? 'Spakuj zwrot' : 'Spakuj i nadaj', intro: isRet ? 'Aplikacja wygenerowała nową kartę zwrotu. Sprzedający zeskanuje ją po odebraniu paczki – wtedy środki wrócą do Ciebie.' : 'Nagranie pakowania jest Twoim dowodem, jeśli pojawi się reklamacja. Najpierw wydrukuj kartę, potem nagraj pakowanie.',
             s1Title: isRet ? 'Nowa karta zwrotu' : 'Karta z kodem', s1Todo: !pk.qr, s1Done: pk.qr, s1Border: a.b, s1Bg: a.bg, s1Fg: a.fg,
+            cardPayload: pk.card ? pk.card.payload : '', hasCard: !!pk.card, cardError: pk.cardError, showCardText: WEB && !!pk.card,
             s2Title: isRet ? 'Nagraj pakowanie zwrotu' : 'Nagraj pakowanie', s2Todo: !pk.video, s2Done: pk.video, dur: pk.dur, s2Border: b.b, s2Bg: b.bg, s2Fg: b.fg, recOpacity: pk.qr ? 1 : 0.4,
             s3Border: c.b, s3Bg: c.bg, s3Fg: c.fg, tracking: pk.tracking,
             setTracking: e => { const val = e.target.value; this.setPh(k, Q => ({ pack: { ...Q.pack, tracking: val } })); },
-            print: () => this.setPh(k, Q => ({ pack: { ...Q.pack, qr: true } })),
+            print: () => this.printPackCard(k, d.id), markPrinted: () => this.setPh(k, Q => ({ pack: { ...Q.pack, qr: true } })),
             rec: () => { if (this.state.phones[k].pack.qr) this.brief(k, isRet ? 'return' : 'packing', d.id); },
             deadline: (isRet ? 'Termin odesłania ok. ' : 'Termin nadania ok. ') + hhmm(dl), cta: isRet ? 'Odeślij paczkę' : 'Nadaj paczkę', cant: !can, opacity: can ? 1 : 0.4, submit: () => { if (can) this.submitPack(k, d.id); } };
         }
         if (scr === 'decide' || P.sheet === 'ok') {
           const dc = P.decide;
-          v.X = { dur: dc.dur, img: unboxImg(d.id), priceText: d.price.toFixed(2), zl: this.zl(d.price), text: dc.text, cant: !dc.cat, opacity: dc.cat ? 1 : 0.4,
+          v.X = { dur: dc.dur, priceText: money(d.price, d.currency), zl: this.zl(d.price, d.currency), text: dc.text, cant: !dc.cat, opacity: dc.cat ? 1 : 0.4, hasQr: !!P.scan?.payload,
             cats: CATS.map(c => ({ label: c, bg: dc.cat === c ? 'var(--amber-tint)' : 'transparent', fg: dc.cat === c ? 'var(--warning)' : 'var(--fg-2)', border: dc.cat === c ? 'var(--warning)' : 'var(--line-strong)', pick: () => this.setPh(k, Q => ({ decide: { ...Q.decide, cat: Q.decide.cat === c ? null : c } })) })),
             setText: e => { const val = e.target.value; this.setPh(k, Q => ({ decide: { ...Q.decide, text: val } })); },
             accept: () => this.setPh(k, { sheet: 'ok' }), acceptConfirm: () => this.accept(k, d.id), complain: () => { if (this.state.phones[k].decide.cat) this.complain(k, d.id); } };
         }
+        if (P.sheet === 'ret') {
+          v.RT = { priceText: money(d.price, d.currency), zl: this.zl(d.price, d.currency), confirm: () => this.confirmReturn(k, d.id) };
+        }
         if (scr === 'verdict') {
-          const win = d.verdict === 'Buyer', iB = d.buyer === k;
-          const yes = (label, good = true) => ({ label, answer: 'tak', color: good ? 'var(--success)' : 'var(--warning)', hasDetail: false, detail: '' });
-          const checks = [yes('Nagranie otwarcia ciągłe, od zamkniętej paczki'), yes('Kod z karty ujawniony dopiero przy otwarciu'), yes('Nagranie pakowania wyraźne, karta w środku'), yes('Paczka zgodna z nagraniem nadania')];
-          checks.push(win ? { label: 'Przedmiot zgodny z opisem', answer: 'nie', color: 'var(--warning)', hasDetail: false, detail: '' } : yes('Przedmiot zgodny z opisem'));
-          checks.push(win ? { label: 'Nieujawniona wada', answer: 'tak', color: 'var(--warning)', hasDetail: true, detail: 'Plama na przodzie · 0:41, 0:52' } : { label: 'Nieujawniona wada', answer: 'nie', color: 'var(--success)', hasDetail: false, detail: '' });
-          const dl = TO[d.status] ? hhmm(d.changedAt + TO[d.status]) : '';
+          const vv = verdictView(d), win = d.verdict === 'Buyer', iB = d.buyer === k;
+          const checks = vv.rows.map(r => {
+            const damage = r.label === 'Nieujawniona wada';
+            return { label: r.label, answer: damage ? (r.ok ? 'nie' : 'tak') : (r.ok ? 'tak' : 'nie'), color: r.ok ? 'var(--success)' : 'var(--warning)', hasDetail: !!r.detail, detail: r.detail };
+          });
           let next = '';
-          if (d.status === 'ReturnRequested') next = iB ? 'Odeślij paczkę z nową kartą zwrotu do ok. ' + dl + '. Gdy sprzedający ją zeskanuje, dostaniesz ' + d.price.toFixed(2) + ' SOL.' : 'Kupujący odsyła paczkę do ok. ' + dl + '. Po odbiorze zeskanuj kartę zwrotu – wtedy środki wrócą do kupującego.';
+          const dl = d.deadlineAt ? hhmm(d.deadlineAt) : '';
+          if (d.status === 'ReturnRequested') next = iB ? 'Odeślij paczkę z nową kartą zwrotu do ok. ' + dl + '. Gdy sprzedający ją zeskanuje, dostaniesz ' + money(d.price, d.currency) + '.' : 'Kupujący odsyła paczkę do ok. ' + dl + '. Po odbiorze zeskanuj kartę zwrotu – wtedy środki wrócą do kupującego.';
           if (d.status === 'Returning') next = 'Zwrot w drodze. Po zeskanowaniu karty albo po terminie środki wrócą do kupującego.';
-          v.V = { title: win ? 'Reklamacja uznana' : 'Reklamacja odrzucona', result: win ? 'Wynik: zwrot dla kupującego' : 'Wynik: środki dla sprzedającego', conclusion: win ? 'zwrot dla kupującego (po odesłaniu paczki)' : 'środki dla sprzedającego', resultColor: win ? 'var(--warning)' : 'var(--success)',
-            reasoning: win ? 'Na nagraniu otwarcia widać plamę na przodzie swetra. Nie ma jej w opisie ani na zdjęciach ogłoszenia. Paczka zgadza się z nagraniem nadania.' : 'Przedmiot zgadza się z opisem i zdjęciami. Wady widoczne na nagraniu były zgłoszone w ogłoszeniu.',
-            checks, next, hasNext: !!next, actReturn: iB && d.status === 'ReturnRequested', returnFlow: () => this.openPack(k, d.id, 'return'),
-            href: EXPL((d.events.find(e => e.label.indexOf('Ocena AI') === 0) || d.events[d.events.length - 1]).sig) };
+          const di = d.events.findIndex(e => e.st === 'Disputed'), res = di >= 0 ? d.events[di + 1] : null;
+          v.V = { title: vv.title, result: win ? 'Wynik: zwrot dla kupującego' : 'Wynik: środki dla sprzedającego', conclusion: win ? 'zwrot dla kupującego (po odesłaniu paczki)' : 'środki dla sprzedającego', resultColor: win ? 'var(--warning)' : 'var(--success)',
+            reasoning: vv.reasoning, byEvidence: vv.byEvidence, checks, hasChecks: checks.length > 0, next, hasNext: !!next, actReturn: iB && d.status === 'ReturnRequested', returnFlow: () => this.openPack(k, d.id, 'return'),
+            reportShort: d.reportHash ? short(d.reportHash) : '', reportHref: d.reportHash ? api.mediaUrl(d.reportHash) : null,
+            model: d.analysis?.model || '', href: res && res.href ? res.href : null };
         }
       }
     }
-    if (scr === 'record' && P.rec) {
-      const el = Math.floor((Date.now() - P.rec.start) / 1000), m = P.rec.mode, pct = Math.min(100, (el / 120) * 100) + '%';
-      if (m === 'unboxing') {
-        const fb = this.fallbackQr(), qr = !fb && el >= 4, can = el >= 4;
-        v.C = { isRec: true, isScan: false, tag: '720p', time: '00:' + pad(Math.min(el, 119)), limitPct: pct, limitColor: el > 100 ? '#FF6B6B' : '#fff', frame: qr ? '#14F195' : 'rgba(255,255,255,.45)', found: qr, notFound: !qr, scanCta: '',
-          bg: can ? unboxImg(P.rec.id) : PARCEL_CLOSED, status: qr ? 'Kod z karty wykryty' : fb && can ? 'Nagrywam – pokaż całe otwarcie' : 'Zacznij od zamkniętej paczki', hint: fb ? 'Kartę z kodem zeskanujesz zaraz po nagraniu. Nagrywaj bez przerw.' : 'Nagrywaj bez przerw, aż całe ubranie będzie widoczne.', hasChecks: false, checks: [], opacity: can ? 1 : 0.4, stop: () => { if (can) this.stopRec(k); }, cancel: () => this.back(k) };
-      } else {
-        const labels = ['Ubranie widoczne', m === 'return' ? 'Karta zwrotu w środku' : 'Karta z kodem w środku', 'Paczka zaklejona', 'Etykieta przewoźnika'];
-        const checks = labels.map((l, i) => ({ label: l, color: el >= (i + 1) * 2 ? '#14F195' : 'rgba(255,255,255,.5)' }));
-        const all = el >= 8;
-        v.C = { isRec: true, isScan: false, tag: '720p', time: '00:' + pad(Math.min(el, 119)), limitPct: pct, limitColor: el > 100 ? '#FF6B6B' : '#fff', frame: 'rgba(255,255,255,.45)', found: false, notFound: true, scanCta: '',
-          bg: el >= 6 ? PARCEL_CLOSED : packingImg(P.rec.id, m === 'return'), status: all ? 'Wszystko widać – możesz zakończyć' : 'Pokaż ubranie, kartę, zaklejenie i etykietę', hint: 'Najpierw nagranie trafi do magazynu plików, potem jego odcisk do umowy.', hasChecks: true, checks, opacity: all ? 1 : 0.4, stop: () => { if (all) this.stopRec(k); }, cancel: () => this.back(k) };
-      }
-    }
-    if (scr === 'scan' && P.scan) {
-      const el = (Date.now() - P.scan.start) / 1000, found = el >= 2.5, d = this.deal(P.scan.id), unbox = P.scan.mode === 'unbox';
-      v.C = { isRec: false, isScan: true, bg: SCAN_CARD, tag: 'skaner', time: '', limitPct: '0%', limitColor: '#fff', frame: found ? '#14F195' : 'rgba(255,255,255,.45)', found, notFound: !found, scanCta: unbox ? 'Dalej' : 'Potwierdź odbiór zwrotu',
-        status: found ? (unbox ? 'Kod z karty zgodny z umową' : 'Karta zwrotu zgodna z umową') : (unbox ? 'Szukam karty z paczki…' : 'Szukam karty zwrotu…'),
-        hint: unbox ? 'Nagranie otwarcia jest zapisane na telefonie. Zeskanuj kartę, która była w paczce.' : 'Zeskanuj kartę z odebranej paczki. Po potwierdzeniu ' + d.price.toFixed(2) + ' SOL wróci do kupującego.', hasChecks: false, checks: [], opacity: found ? 1 : 0.4,
-        stop: () => { if (!found) return; if (unbox) this.setPh(k, Q => ({ scan: null, stack: [...Q.stack.slice(0, -1), { screen: 'decide', id: d.id }] })); else this.confirmReturn(k, d.id); }, cancel: () => this.back(k) };
-    }
+    if (scr === 'record' && P.rec) v.R = { mode: P.rec.mode, done: (uri, payload, secs) => this.recDone(k, uri, payload, secs), cancel: () => this.back(k) };
+    if (scr === 'scan' && P.scan) v.Q = { prefix: P.scan.mode === 'unbox' ? 'UNBOX1:' : 'UNBOX1R:', done: payload => this.scanDone(k, payload), cancel: () => this.back(k),
+      hint: P.scan.mode === 'unbox' ? 'Nagranie otwarcia jest zapisane. Zeskanuj kartę, która była w paczce.' : 'Zeskanuj kartę zwrotu z odebranej paczki.' };
+    if (scr === 'photo') v.PH = { done: uri => this.setPh(k, Q => ({ form: { ...Q.form, photos: [...Q.form.photos, uri].slice(0, 4) }, stack: Q.stack.slice(0, -1) })), cancel: () => this.back(k) };
     if (scr === 'sell') {
-      const f = P.form, price = parseFloat((f.price || '').replace(',', '.')), ok = f.title.trim().length > 2 && price > 0;
-      v.form = f; v.formPhotos = SELL_IMG; v.formZl = price > 0 ? this.zl(price) : '0,00 zł'; v.cantPublish = !ok; v.publishOpacity = ok ? 1 : 0.4;
+      const f = P.form, ok = f.title.trim().length > 2 && f.price.trim().length > 0 && (!me || PAYMENTS !== 'solana' || canBuy(me, PAYMENTS, s.linkError).ok);
+      v.form = f; v.formZl = this.zl(parseFloat((f.price || '').replace(',', '.')) || 0, cur); v.cantPublish = !ok; v.publishOpacity = ok ? 1 : 0.4; v.priceError = f.priceError; v.unit = cur === 'SOL' ? 'SOL' : 'zł';
+      v.sellBlocked = PAYMENTS === 'solana' && me && !canBuy(me, PAYMENTS, s.linkError).ok ? canBuy(me, PAYMENTS, s.linkError).reason : '';
+      v.priceHint = cur === 'SOL' ? 'Maks. 0,1 SOL. Wystawienie kosztuje depozyt za miejsce w sieci (ok. 0,0055 SOL).' : 'Cena w złotych (tryb demo).';
       v.conds = CONDS.map(c => ({ label: c, bg: c === f.cond ? 'var(--fg-1)' : 'transparent', fg: c === f.cond ? 'var(--ink-950)' : 'var(--fg-2)', pick: () => this.setPh(k, Q => ({ form: { ...Q.form, cond: c } })) }));
+      const catId = f.catId ?? s.cats[0]?.id;
+      v.formCats = s.cats.map(c => ({ label: c.name, bg: c.id === catId ? 'var(--fg-1)' : 'transparent', fg: c.id === catId ? 'var(--ink-950)' : 'var(--fg-2)', border: c.id === catId ? 'var(--fg-1)' : 'var(--line-strong)', pick: () => this.setPh(k, Q => ({ form: { ...Q.form, catId: c.id } })) }));
       v.formFlaws = f.flaws.map((t, i) => ({ text: t, remove: () => this.setPh(k, Q => ({ form: { ...Q.form, flaws: Q.form.flaws.filter((_, j) => j !== i) } })) }));
-      v.fTitle = this.setForm(k, 'title'); v.fBrand = this.setForm(k, 'brand'); v.fSize = this.setForm(k, 'size'); v.fPrice = this.setForm(k, 'price'); v.fFlaw = this.setForm(k, 'flawDraft');
+      v.formPhotos = f.photos.map((uri, i) => ({ uri, remove: () => this.setPh(k, Q => ({ form: { ...Q.form, photos: Q.form.photos.filter((_, j) => j !== i) } })) }));
+      v.canAddPhoto = !WEB && f.photos.length < 4; v.addPhoto = () => this.go(k, 'photo', 'form');
+      v.fTitle = this.setForm(k, 'title'); v.fBrand = this.setForm(k, 'brand'); v.fSize = this.setForm(k, 'size'); v.fPrice = this.setForm(k, 'price'); v.fFlaw = this.setForm(k, 'flawDraft'); v.fDesc = this.setForm(k, 'desc');
       v.addFlaw = () => this.setPh(k, Q => (Q.form.flawDraft.trim() ? { form: { ...Q.form, flaws: [...Q.form.flaws, Q.form.flawDraft.trim()], flawDraft: '' } } : {}));
       v.publish = () => { if (ok) this.publish(k); };
     }
     if (scr === 'deals') {
       const buys = P.dealsTab === 'Zakupy';
-      const rows = s.deals.filter(d => (buys ? d.buyer === k : d.seller === k)).map(d => this.dv(d, k));
-      v.rowsLoading = !!P.dealsLoad; v.rows = P.dealsLoad ? [] : rows; v.rowsEmpty = !P.dealsLoad && rows.length === 0; v.rowsEmptyText = buys ? 'Nie masz jeszcze zakupów' : 'Nie masz jeszcze ogłoszeń';
+      const rows = s.deals.filter(d => (buys ? d.buyer === k : d.seller === k)).sort((a, b) => b.changedAt - a.changedAt).map(d => this.dv(d, k));
+      v.rowsLoading = P.feed === 'loading'; v.rows = rows; v.rowsEmpty = P.feed !== 'loading' && rows.length === 0; v.rowsEmptyText = buys ? 'Nie masz jeszcze zakupów' : 'Nie masz jeszcze ogłoszeń';
       v.buysLine = buys ? 'var(--fg-1)' : 'transparent'; v.buysColor = buys ? 'var(--fg-1)' : 'var(--fg-3)'; v.salesLine = !buys ? 'var(--fg-1)' : 'transparent'; v.salesColor = !buys ? 'var(--fg-1)' : 'var(--fg-3)';
       v.tabBuys = () => this.setPh(k, { dealsTab: 'Zakupy' }); v.tabSales = () => this.setPh(k, { dealsTab: 'Sprzedaże' });
     }
     if (scr === 'wallet') {
-      const esc = s.deals.filter(d => d.buyer === k && ESCROW.includes(d.status)).reduce((a, d) => a + d.price, 0);
-      v.escrow = esc.toFixed(3); v.escrowZl = this.zl(esc); v.hasEscrow = esc > 0;
+      const w = s.wallet, esc = w ? toUnits(w.heldMinor, w.currency) : 0;
+      v.escrow = money(esc, cur); v.escrowZl = this.zl(esc, cur); v.hasEscrow = esc > 0;
       const R = s.rate, at = R.at ? new Date(R.at) : null, t = at ? pad(at.getHours()) + ':' + pad(at.getMinutes()) + ':' + pad(at.getSeconds()) : '';
-      v.rateText = fmtPL(R.pln, 2) + ' zł'; v.rateDot = R.live ? 'var(--secured)' : 'var(--warning)';
+      v.showRate = cur === 'SOL'; v.rateText = fmtPL(R.pln, 2) + ' zł'; v.rateDot = R.live ? 'var(--secured)' : 'var(--warning)';
       v.rateSrc = (R.live ? 'Na żywo z CoinGecko · ' + t : 'Kurs przykładowy – brak połączenia z serwisem kursów') + '. Przeliczenia są orientacyjne, umowa rozlicza się tylko w SOL.';
-      v.history = (s.history[k] || []).map(h => ({ label: h.label, amount: (h.in ? '+' : '−') + h.amt.toFixed(3), color: h.in ? 'var(--success)' : 'var(--fg-1)', icon: ICON(h.in ? 'arrow-down-left' : 'arrow-up-right'), zl: this.zl(h.amt) }));
+      let hist = [];
+      if (w && w.ledger.length) hist = w.ledger.map(e => ({ label: e.label, amt: toUnits(Math.abs(e.amountMinor), w.currency), in: e.amountMinor > 0 }));
+      else for (const d of s.deals) {
+        if (d.buyer === k && d.status !== 'Listed') hist.push({ label: 'Zakup · ' + d.title, amt: d.price, in: false, at: d.events[1]?.at || 0 });
+        if (d.seller === k && d.status === 'Completed') hist.push({ label: 'Wypłata · ' + d.title, amt: d.price, in: true, at: d.changedAt });
+        if (d.buyer === k && d.status === 'Refunded') hist.push({ label: 'Zwrot · ' + d.title, amt: d.price, in: true, at: d.changedAt });
+      }
+      if (!(w && w.ledger.length)) hist.sort((a, b) => b.at - a.at);
+      v.history = hist.map(h => ({ label: h.label, amount: (h.in ? '+' : '−') + money(h.amt, cur), color: h.in ? 'var(--success)' : 'var(--fg-1)', icon: ICON(h.in ? 'arrow-down-left' : 'arrow-up-right'), zl: this.zl(h.amt, cur) }));
+      v.hasHistory = v.history.length > 0;
     }
-    v.sheetBuy = P.sheet === 'buy' && !!v.L; v.sheetDev = P.sheet === 'dev'; v.sheetFilters = P.sheet === 'filters' && scr === 'browse'; v.sheetOk = P.sheet === 'ok' && !!v.X; v.closeSheet = () => this.setPh(k, { sheet: null });
+    v.sheetBuy = P.sheet === 'buy' && !!v.L; v.sheetDev = P.sheet === 'dev'; v.sheetFilters = P.sheet === 'filters' && scr === 'browse'; v.sheetOk = P.sheet === 'ok' && !!v.X; v.sheetRet = P.sheet === 'ret' && !!v.RT; v.closeSheet = () => this.setPh(k, { sheet: null });
     v.rulesOpen = P.rulesOpen; v.rulesLabel = P.rulesOpen ? 'Ukryj reguły' : 'Zobacz jakie reguły →'; v.toggleRules = () => this.setPh(k, Q => ({ rulesOpen: !Q.rulesOpen }));
     v.hasBanner = !!P.banner && !P.tx; v.bannerText = P.banner ? P.banner.text : '';
     v.bannerOpen = () => { const b = this.state.phones[k].banner; this.setPh(k, b && b.id && !this.state.phones[k].onb ? { banner: null, tab: 'deals', stack: [{ screen: 'deal', id: b.id }] } : { banner: null }); };
     v.hasTx = !!P.tx;
     if (P.tx) {
-      const T = P.tx, el = Date.now() - T.start, up = T.upload ? 2600 : 0;
+      const T = P.tx, order = ['upload', 'chain', 'sync'];
       const defs = [];
-      if (T.upload) defs.push({ label: 'Wysyłanie nagrania', from: 0, to: up, upload: true });
-      defs.push({ label: 'Przygotowanie operacji', from: up, to: up + 400 }, { label: 'Wysyłanie do sieci', from: up + 400, to: up + 1000 }, { label: 'Potwierdzanie przez sieć', from: up + 1000, to: up + 2200 });
-      const steps = defs.map(dd => {
-        const st = T.phase !== 'run' ? 'done' : el >= dd.to ? 'done' : el >= dd.from ? 'current' : 'todo';
+      if (T.upload) defs.push(['upload', 'Wysyłanie pliku']);
+      defs.push(['chain', 'Zapisywanie w umowie'], ['sync', 'Potwierdzanie i odświeżanie']);
+      const at = order.indexOf(T.stage);
+      const steps = defs.map(([id, label]) => {
+        const i = order.indexOf(id), st = T.phase !== 'run' ? 'done' : i < at ? 'done' : i === at ? 'current' : 'todo';
         const c = st === 'done' ? 'var(--success)' : st === 'current' ? 'var(--accent)' : 'var(--line-strong)';
-        const frac = Math.max(0, Math.min(1, (el - dd.from) / (dd.to - dd.from)));
-        return { label: dd.label, color: c, fill: st === 'todo' ? 'transparent' : c, labelColor: st === 'todo' ? 'var(--fg-3)' : 'var(--fg-1)', weight: st === 'current' ? 700 : 500,
-          showBar: !!dd.upload && st === 'current', pct: Math.round(frac * 100) + '%', hasDetail: !!dd.upload, detail: dd.upload ? Math.round(frac * T.mb) + ' / ' + T.mb + ' MB' : '' };
+        return { label, color: c, fill: st === 'todo' ? 'transparent' : c, labelColor: st === 'todo' ? 'var(--fg-3)' : 'var(--fg-1)', weight: st === 'current' ? 700 : 500, showBar: false, pct: '0%', hasDetail: false, detail: '' };
       });
-      v.T = { run: T.phase === 'run', ok: T.phase === 'ok', fail: T.phase === 'fail', title: T.title, steps, okTitle: T.okTitle || '', okText: T.okText || '', sigShort: T.sig ? short(T.sig) : '', href: T.sig ? EXPL(T.sig) : '#',
-        failTitle: T.failTitle || '', failText: T.failText || '', code: T.code || '', hasCode: !!T.code, retryable: !!T.retryable, needFunds: !!T.needFunds, topUp: () => this.faucet(k),
-        retry: () => { const c = this.pending[k]; if (c) this.tx(k, c); }, close: () => this.setPh(k, { tx: null }) };
+      v.T = { run: T.phase === 'run', ok: T.phase === 'ok', fail: T.phase === 'fail', title: T.title, steps, okTitle: T.okTitle || '', okText: T.okText || '', sigShort: T.sig ? short(T.sig) : '', href: T.href || null, hasHref: !!T.href,
+        failTitle: T.failTitle || '', failText: T.failText || '', code: T.code || '', hasCode: !!T.code, retryable: !!T.retryable, needFunds: !!T.needFunds && PAYMENTS === 'solana', topUp: () => this.faucet(k),
+        retry: () => this.retry(k), close: () => this.setPh(k, { tx: null }) };
     }
     return v;
   }
 
   render() { return React.createElement(Ctx.Provider, { value: this.renderVals() }, this.props.children); }
   renderVals() {
-    const k = this.state.active, fm = this.state.failMode, sc = this.state.scene;
+    const k = this.state.active, s = this.state, P = s.phones[k];
     const on2 = on => ({ bg: on ? 'var(--fg-1)' : 'transparent', fg: on ? 'var(--ink-950)' : 'var(--fg-1)', border: on ? 'var(--fg-1)' : 'var(--line-strong)' });
     const g = {
-      clockNow: hhmm(this.now()), skip: () => this.setState(s => ({ offset: s.offset + 600 })), reset: () => this.reset(),
-      failOpts: FAIL_OPTS.map(([id, label]) => { const on = fm === id, c = id === 'ok' ? 'var(--fg-1)' : 'var(--danger)'; return { label, bg: on ? c : 'transparent', fg: on ? 'var(--ink-950)' : 'var(--fg-1)', border: on ? c : 'var(--line-strong)', pick: () => this.setState({ failMode: id }) }; }),
-      scenes: SCENES.map(x => ({ label: x.label, ...on2(sc === x.id), go: () => this.scene(x.id) })),
-      hasCue: !!sc, cue: sc ? SCENES.find(x => x.id === sc).cue : '',
-      accounts: PHONES.map(u => ({ label: ROLE[u].label, bg: u === k ? 'var(--fg-1)' : 'transparent', fg: u === k ? 'var(--ink-950)' : 'var(--fg-2)', pick: () => this.switchTo(u) })),
+      clockNow: hhmm(this.now()), solanaMode: PAYMENTS === 'solana', devMsg: s.devMsg, hasDevMsg: !!s.devMsg,
+      skip: async () => { try { await devClock(660); await this.syncClock(); await this.refresh(); this.setState({ devMsg: 'Zegar serwera przesunięty o 11 min.' }); } catch (e) { this.setState({ devMsg: explain(e).text }); } },
+      scenarios: [['ok', 'Ocena: odrzucona'], ['defect', 'Ocena: uznana']].map(([id, label]) => ({ label, ...on2((demoScenario ?? 'ok') === id), pick: () => { setDemoScenario(id); this.setState({ devMsg: 'Następna reklamacja: ' + label.toLowerCase() + '.' }); } })),
+      accounts: QUICK.map(([email, label]) => ({ label, bg: s.me?.email === email ? 'var(--fg-1)' : 'transparent', fg: s.me?.email === email ? 'var(--ink-950)' : 'var(--fg-2)', pick: () => this.switchAccount(email) })),
+      env: [['Serwer', api.base], ['Tryb płatności', PAYMENTS], ['Portfel', s.wallet?.address || '—'], ['Weryfikator', ARBITER || '—']],
+      walletJson: P?.walletJson || '', setWalletJson: t => this.setPh(k, { walletJson: t }),
+      importWallet: async () => { try { const a = await importWalletJson(this.state.phones[k].walletJson); this.setState({ devMsg: 'Portfel ' + short(a) + ' zapisany. Uruchom aplikację ponownie (odśwież stronę).' }); } catch (e) { this.setState({ devMsg: 'To nie jest plik portfela (tablica 64 liczb).' }); } },
+      logout: () => this.logout(),
     };
     return { phones: [{ ...this.vm(k), ...g }] };
   }

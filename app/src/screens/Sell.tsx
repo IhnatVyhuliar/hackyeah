@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Pressable } from 'react-native';
-import { Txt, Label, Icon, Photo, Btn, Field, Body, Footer, ev } from '../ui';
+import { Txt, Label, Icon, Photo, Btn, Field, Body, Footer, Chip, ev } from '../ui';
 import { col, LINE, LINE_STRONG } from '../theme';
 
 export function Sell({ p }: any) {
@@ -10,15 +10,25 @@ export function Sell({ p }: any) {
       <View style={{ height: 56, paddingHorizontal: 20, justifyContent: 'center' }}><Txt s={20} w={600}>Nowe ogłoszenie</Txt></View>
       <Body>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {[0, 1, 2].map(i => <Photo key={i} h={88} src={p.formPhotos[i]} style={{ flex: 1 }} />)}
-          <View style={{ flex: 1, height: 88, borderRadius: 4, borderWidth: 1, borderStyle: 'dashed', borderColor: col('var(--fg-3)'), alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="camera" size={22} color="var(--fg-3)" />
-          </View>
+          {p.formPhotos.map((ph: any, i: number) => (
+            <Pressable key={i} onPress={ph.remove} style={{ flex: 1 }} accessibilityLabel="Usuń zdjęcie"><Photo h={88} uri={ph.uri} /></Pressable>
+          ))}
+          {p.canAddPhoto ? (
+            <Pressable onPress={p.addPhoto} accessibilityLabel="Zrób zdjęcie" style={{ flex: 1, maxWidth: '25%', height: 88, borderRadius: 4, borderWidth: 1, borderStyle: 'dashed', borderColor: col('var(--fg-3)'), alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="camera" size={22} color="var(--fg-3)" />
+            </Pressable>
+          ) : null}
         </View>
+        {p.web ? <Txt s={13} c="var(--fg-3)">Zdjęcia robi się aparatem w aplikacji na telefonie. W przeglądarce ogłoszenie idzie bez zdjęć.</Txt> : null}
         <Field label="Tytuł" value={f.title} onChangeText={(t: string) => p.fTitle(ev(t))} placeholder="np. Kurtka jeansowa" />
+        <Field label="Opis" value={f.desc} onChangeText={(t: string) => p.fDesc(ev(t))} placeholder="Krój, materiał, jak był noszony" multiline h={76} />
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <Field style={{ flex: 1 }} label="Marka" value={f.brand} onChangeText={(t: string) => p.fBrand(ev(t))} />
           <Field style={{ flex: 1 }} label="Rozmiar" value={f.size} onChangeText={(t: string) => p.fSize(ev(t))} />
+        </View>
+        <View style={{ gap: 6 }}>
+          <Label>Kategoria</Label>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{p.formCats.map((c: any) => <Chip key={c.label} c={c} />)}</View>
         </View>
         <View style={{ gap: 6 }}>
           <Label>Stan</Label>
@@ -44,9 +54,11 @@ export function Sell({ p }: any) {
           </View>
         </View>
         <View style={{ gap: 6 }}>
-          <Field label="Cena" mono suffix="SOL" keyboardType="decimal-pad" value={f.price} onChangeText={(t: string) => p.fPrice(ev(t))} />
-          <Txt s={13} c="var(--fg-3)" lh={1.45}><Txt mono s={13} c="var(--fg-2)">≈ {p.formZl}</Txt> wg bieżącego kursu. Cena w SOL jest zmienna – przeliczenie jest orientacyjne.</Txt>
+          <Field label="Cena" mono suffix={p.unit} keyboardType="decimal-pad" value={f.price} onChangeText={(t: string) => p.fPrice(ev(t))} />
+          {p.priceError ? <Txt s={14} w={500} c="var(--danger)">{p.priceError}</Txt> : null}
+          <Txt s={13} c="var(--fg-3)" lh={1.45}>{p.formZl ? <Txt mono s={13} c="var(--fg-2)">≈ {p.formZl} </Txt> : null}{p.priceHint}</Txt>
         </View>
+        {p.sellBlocked ? <Txt s={14} w={500} c="var(--warning)">{p.sellBlocked}</Txt> : null}
       </Body>
       <Footer center>
         <Label>Po zakupie opisu nie da się zmienić</Label>

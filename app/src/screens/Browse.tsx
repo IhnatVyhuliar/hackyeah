@@ -6,12 +6,12 @@ import { col, F, PH, LINE, LINE_STRONG } from '../theme';
 function Card({ l }: any) {
   return (
     <Pressable onPress={l.open} style={{ width: '48%' }}>
-      <Photo h={178} label={l.cat} src={l.img} />
+      <Photo h={178} label={l.cat} uri={l.photo} />
       <View style={{ paddingTop: 10, gap: 3 }}>
         <Txt s={15} numberOfLines={1}>{l.title}</Txt>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-          <Txt mono s={15} w={500}>{l.priceText} SOL</Txt>
-          <Txt mono s={12} c="var(--fg-3)">≈ {l.zl}</Txt>
+          <Txt mono s={15} w={500}>{l.priceText}</Txt>
+          {l.zl ? <Txt mono s={12} c="var(--fg-3)">≈ {l.zl}</Txt> : null}
         </View>
         <Txt mono s={11} w={500} up ls={0.6} c="var(--fg-3)" numberOfLines={1}>{l.meta}</Txt>
       </View>
@@ -25,8 +25,8 @@ export function Browse({ p }: any) {
       <View style={{ height: 56, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <View style={{ flex: 1 }}><Wordmark s={24} /></View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Txt mono s={13} w={500}>{p.balance} SOL</Txt>
-          <Txt mono s={11} c="var(--fg-3)">≈ {p.balanceZl}</Txt>
+          <Txt mono s={13} w={500}>{p.balance}</Txt>
+          {p.balanceZl ? <Txt mono s={11} c="var(--fg-3)">≈ {p.balanceZl}</Txt> : null}
         </View>
       </View>
 
@@ -51,7 +51,7 @@ export function Browse({ p }: any) {
       <View style={{ flex: 1, borderTopWidth: 1, borderTopColor: LINE }}>
         {p.feedLoading ? (
           <View style={{ padding: 20, paddingTop: 14, gap: 14 }}>
-            <Label>Wczytuję ogłoszenia z sieci…</Label>
+            <Label>Wczytuję ogłoszenia…</Label>
             {[0, 1].map(i => (
               <View key={i} style={{ flexDirection: 'row', gap: 12 }}>
                 <View style={{ flex: 1, height: 180, borderRadius: 4, backgroundColor: col('var(--surface-2)') }} />
@@ -62,7 +62,7 @@ export function Browse({ p }: any) {
         ) : null}
         {p.feedError ? (
           <View style={{ padding: 20, paddingTop: 38 }}>
-            <Notice tone="var(--danger)" icon="wifi-off" title="Nie udało się wczytać ogłoszeń" text="Sieć testowa ma limity zapytań i chwilowo nie odpowiada. Twoje środki i umowy są bez zmian.">
+            <Notice tone="var(--danger)" icon="wifi-off" title="Nie udało się wczytać ogłoszeń" text={p.feedErrorText}>
               <Btn kind="outline" h={48} s={16} label="Spróbuj ponownie" onPress={p.reload} />
             </Notice>
           </View>
@@ -70,7 +70,7 @@ export function Browse({ p }: any) {
         {p.feedOk ? (
           <FlatList
             data={p.feed}
-            keyExtractor={(l: any, i) => l.title + i}
+            keyExtractor={(l: any) => l.id}
             numColumns={2}
             columnWrapperStyle={{ justifyContent: 'space-between' }}
             contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 20, gap: 20 }}

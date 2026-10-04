@@ -7,7 +7,6 @@ import { SpaceGrotesk_400Regular, SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBo
 import { JetBrainsMono_400Regular, JetBrainsMono_500Medium, JetBrainsMono_600SemiBold, JetBrainsMono_700Bold } from '@expo-google-fonts/jetbrains-mono';
 import { AppProvider } from './src/AppProvider';
 import { Root } from './src/Root';
-import { CONFIG } from './src/config';
 
 export default function App() {
   const [loaded] = useFonts({
@@ -18,7 +17,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      <AppProvider {...CONFIG}>
+      <AppProvider>
         <Root />
       </AppProvider>
     </SafeAreaProvider>

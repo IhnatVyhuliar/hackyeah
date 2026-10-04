@@ -8,7 +8,7 @@ export function Listing({ p }: any) {
   return (
     <View style={{ flex: 1 }}>
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
-        <Photo h={380} label="zdjęcie 1/4" src={L.img} style={{ borderRadius: 0, borderWidth: 0 }} />
+        <Photo h={380} label={L.photoLabel} uri={L.photo} style={{ borderRadius: 0, borderWidth: 0 }} />
       </View>
       <View style={{ paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row' }}>
         <Pressable onPress={p.back} style={{ width: 44, height: 44, borderRadius: 44, backgroundColor: col('var(--scrim)'), borderWidth: 1, borderColor: LINE, alignItems: 'center', justifyContent: 'center' }}>
@@ -31,13 +31,14 @@ export function Listing({ p }: any) {
         </View>
       </ScrollView>
       <Footer border>
+        {L.notOwn && L.blocked ? <Txt s={14} w={500} c="var(--warning)">{L.blockedReason}</Txt> : null}
         <Row><Icon name="shield-check" size={16} color="var(--secured)" /><Txt s={14} c="var(--fg-2)" style={{ flex: 1 }}>Środki trafią do umowy, nie do nas. Bez opłaty za ochronę.</Txt></Row>
         <Row gap={16}>
           <View>
-            <Txt mono s={22} w={500}>{L.priceText} SOL</Txt>
-            <Txt mono s={12} c="var(--fg-3)" style={{ marginTop: 2 }}>≈ {L.zl} · orientacyjnie</Txt>
+            <Txt mono s={22} w={500}>{L.priceText}</Txt>
+            {L.zl ? <Txt mono s={12} c="var(--fg-3)" style={{ marginTop: 2 }}>≈ {L.zl} · orientacyjnie</Txt> : null}
           </View>
-          {L.notOwn ? <Btn label="Kup" onPress={p.openBuy} style={{ flex: 1 }} /> : <Label style={{ flex: 1, textAlign: 'right' }}>To Twoje ogłoszenie</Label>}
+          {L.notOwn ? <Btn label="Kup" onPress={p.openBuy} disabled={L.blocked} style={{ flex: 1 }} /> : <Label style={{ flex: 1, textAlign: 'right' }}>To Twoje ogłoszenie</Label>}
         </Row>
       </Footer>
     </View>

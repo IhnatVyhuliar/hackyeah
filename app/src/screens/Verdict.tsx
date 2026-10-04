@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { Txt, Label, Btn, Notice, Header, Body, Footer, ExplorerLink } from '../ui';
+import { Txt, Label, Btn, Notice, Header, Body, Footer, ExplorerLink, KV } from '../ui';
 import { col, LINE, LINE_STRONG } from '../theme';
 
 export function Verdict({ p }: any) {
@@ -13,8 +13,9 @@ export function Verdict({ p }: any) {
         <View style={{ alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 2, borderColor: col(V.resultColor) }}>
           <Txt s={16} w={700} c={V.resultColor}>{V.result}</Txt>
         </View>
-        <View>
-          <Label style={{ marginBottom: 2 }}>Sprawdzone warunki</Label>
+        {V.byEvidence ? <Notice tone="var(--line-strong)" icon="file-warning" iconColor="var(--fg-2)" title="Bez oceny nagrań" text={V.reasoning} /> : null}
+        {V.hasChecks ? <View>
+          <Label style={{ marginBottom: 2 }}>Sprawdzone warunki (w kolejności reguły)</Label>
           {V.checks.map((c: any, i: number) => (
             <View key={i} style={{ flexDirection: 'row', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: LINE }}>
               <View style={{ flex: 1 }}>
@@ -25,11 +26,13 @@ export function Verdict({ p }: any) {
             </View>
           ))}
           <Txt s={17} w={700} c={V.resultColor} style={{ paddingVertical: 12 }}>→ {V.conclusion}</Txt>
-        </View>
-        <View style={{ gap: 6 }}>
+        </View> : null}
+        {!V.byEvidence ? <View style={{ gap: 6 }}>
           <Label>Opis nagrań przygotowany przez AI</Label>
           <Txt s={15} c="var(--fg-2)" lh={1.45}>{V.reasoning}</Txt>
-        </View>
+        </View> : null}
+        {V.reportShort ? <KV k="Raport zgodny z zapisem w umowie" v={V.reportShort} last /> : null}
+        {V.reportHref ? <ExplorerLink href={V.reportHref} label="Pobierz raport (report.json)" /> : null}
         <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: LINE_STRONG, borderRadius: 8, overflow: 'hidden' }}>
           <View style={{ flex: 1, padding: 14, gap: 6, borderRightWidth: 1, borderRightColor: LINE_STRONG }}>
             <Label c="var(--secured)">Tutaj</Label>
@@ -44,7 +47,7 @@ export function Verdict({ p }: any) {
       </Body>
       <Footer border gap={6}>
         {V.actReturn ? <Btn icon="package" label="Spakuj zwrot" onPress={V.returnFlow} /> : null}
-        <ExplorerLink href={V.href} label="Pełny raport · Solana Explorer" />
+        {V.href ? <ExplorerLink href={V.href} label="Zobacz w Solana Explorer" /> : null}
       </Footer>
     </View>
   );
