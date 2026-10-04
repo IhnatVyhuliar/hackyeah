@@ -57,6 +57,15 @@ describe("SolanaEscrow against the program", () => {
     assert.equal(await connection.getBalance(m.buyer.publicKey), before);
   });
 
+  it("a seller who is the arbiter of their own sale is refused before signing, even if the app trusts that key", async () => {
+    const m = await market();
+    await m.mk(m.seller, m.seller.publicKey).createListing({ ...m.args, arbiter: m.seller.publicKey.toBase58() });
+    const before = await connection.getBalance(m.buyer.publicKey);
+    await assert.rejects(m.mk(m.buyer, m.seller.publicKey).purchase(m.key), code("ArbiterMismatch"));
+    assert.equal(await connection.getBalance(m.buyer.publicKey), before);
+    assert.equal(statusOf(await program.account.deal.fetch(m.deal)), "listed");
+  });
+
   it("Review Focus 1: a card from another parcel or a return card is refused before anything is sent", async () => {
     const m = await market();
     await m.s.createListing(m.args);
