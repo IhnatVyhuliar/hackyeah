@@ -12,7 +12,7 @@ use reqwest::blocking::{Client as Http, RequestBuilder};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use solana_keypair::{read_keypair_file, Keypair};
-use unbox_escrow::logic::ship_commitment;
+use unbox_escrow::logic::{return_commitment, ship_commitment};
 use unbox_escrow::state::Deal;
 use unbox_escrow::{accounts, instruction};
 
@@ -64,6 +64,31 @@ enum Cmd {
     },
     /// Buyer: "Wszystko OK" with the scanned QR payload (accept_delivery).
     Accept {
+        #[arg(long)]
+        qr: String,
+    },
+    /// Buyer: "Reklamuję" with the scanned QR payload (open_dispute). Hashes both files, does not upload them.
+    Dispute {
+        #[arg(long)]
+        qr: String,
+        /// Unboxing recording.
+        #[arg(long)]
+        video: String,
+        /// complaint.json.
+        #[arg(long)]
+        complaint: String,
+    },
+    /// Buyer: send the goods back (mark_returned); prints the return QR payload for the card.
+    Return {
+        #[arg(long)]
+        listing: String,
+        #[arg(long)]
+        tracking: String,
+        #[arg(long)]
+        video: String,
+    },
+    /// Seller: confirm the return with the scanned return QR payload (confirm_return).
+    ConfirmReturn {
         #[arg(long)]
         qr: String,
     },
@@ -235,6 +260,47 @@ fn run(cli: Cli) -> Result<()> {
                 .request()
                 .accounts(accounts::AcceptDelivery { buyer: me, deal, seller: account.seller })
                 .args(instruction::AcceptDelivery { qr_secret: secret })
+                .send()?;
+            report(&cli, &api, &deal, &signature.to_string())
+        }
+        Cmd::Dispute { qr, video, complaint } => {
+            let (deal, secret) = qr::parse_ship(qr)?;
+            let video_hash = sha256(&std::fs::read(video).with_context(|| format!("read {video}"))?);
+            let complaint_hash = sha256(&std::fs::read(complaint).with_context(|| format!("read {complaint}"))?);
+            println!("video:     {}", hex::encode(video_hash));
+            println!("complaint: {}", hex::encode(complaint_hash));
+            println!("note:     upload both files to /api/media before relying on this dispute (upload first, then the transaction)");
+            let signature = program
+                .request()
+                .accounts(accounts::OpenDispute { buyer: me, deal })
+                .args(instruction::OpenDispute { qr_secret: secret, unboxing_video_hash: video_hash, complaint_hash })
+                .send()?;
+            report(&cli, &api, &deal, &signature.to_string())
+        }
+        Cmd::Return { listing, tracking, video } => {
+            let deal = api.deal_of(listing)?;
+            let mut secret = [0u8; 32];
+            getrandom::fill(&mut secret).map_err(|e| anyhow!("random: {e}"))?;
+            let video_hash = sha256(&std::fs::read(video).with_context(|| format!("read {video}"))?);
+            let signature = program
+                .request()
+                .accounts(accounts::MarkReturned { buyer: me, deal })
+                .args(instruction::MarkReturned {
+                    return_qr_commitment: return_commitment(&deal, &secret),
+                    return_video_hash: video_hash,
+                    return_tracking_number: tracking.clone(),
+                })
+                .send()?;
+            println!("QR:       {}", qr::return_payload(&deal, &secret));
+            report(&cli, &api, &deal, &signature.to_string())
+        }
+        Cmd::ConfirmReturn { qr } => {
+            let (deal, secret) = qr::parse_return(qr)?;
+            let account: Deal = program.account(deal)?;
+            let signature = program
+                .request()
+                .accounts(accounts::ConfirmReturn { seller: me, deal, buyer: account.buyer })
+                .args(instruction::ConfirmReturn { return_qr_secret: secret })
                 .send()?;
             report(&cli, &api, &deal, &signature.to_string())
         }
