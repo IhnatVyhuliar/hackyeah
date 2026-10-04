@@ -1,5 +1,7 @@
 # Zadania — przegląd
 
+Od 04.10 01:30 obowiązuje podział na dwie osoby: [plan A (aplikacja + server)](../superpowers/plans/2026-10-04-a-app-server.md) i [plan B (escrow + łańcuch)](../superpowers/plans/2026-10-04-b-escrow-chain.md). Poniższe pliki ról zostają jako opis zakresu.
+
 Specyfikacja jest w `CLAUDE.md` (§4 program, §5 wyrocznia, §6 aplikacja) oraz w IDL w `packages/shared/idl/`. Ten katalog mówi, **kto co robi, do kiedy i na kogo czeka**. Godziny i kamienie K0–K6 pochodzą z `CLAUDE.md` §10.
 
 ## Role

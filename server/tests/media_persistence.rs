@@ -37,6 +37,14 @@ async fn media_upload_rules() {
     let (s, v) = ania.upload_bytes(data.clone(), "video/mp4", "inna-nazwa.mp4").await;
     assert_eq!((s.as_u16(), v["sha256"].as_str()), (201, Some(sha.as_str())));
 
+    // complaint.json (app) and report.json (oracle) are stored like videos; their sha256 goes on-chain
+    let doc = br#"{"v":1,"category":"damaged","description":"plama","created_at":1791050000}"#.to_vec();
+    let (s, v) = ania.upload_bytes(doc.clone(), "application/json", "complaint.json").await;
+    assert_eq!(s.as_u16(), 201, "{v}");
+    let got = reqwest::get(format!("{}/media/{}", be.url, v["sha256"].as_str().unwrap())).await.unwrap();
+    assert_eq!(got.headers()["content-type"], "application/json");
+    assert_eq!(got.bytes().await.unwrap().to_vec(), doc);
+
     // błędy wejścia
     let form_field_only = b"--b\r\nContent-Disposition: form-data; name=\"markers\"\r\n\r\n{}\r\n--b--\r\n".to_vec();
     expect_error(&raw_post(&be, &token, "multipart/form-data; boundary=b", form_field_only).await, 400, "VALIDATION");

@@ -3,3 +3,4 @@ export * from './schemas';
 export * from './constants';
 export * from './helpers';
 export * from './dealMachine';
+export * from './escrow';

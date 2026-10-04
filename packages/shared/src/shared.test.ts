@@ -5,6 +5,7 @@ import {
   canonicalJson, createQr, decide, formatPln, parsePln, parseQrPayload, qrPayload, returnCommitment, shipCommitment, verifyQr,
 } from './helpers';
 import type { Deal, OracleReport } from './types';
+import { EscrowError, isEscrowError } from './escrow';
 
 // Wektory QR (policzone niezależnie przez node:crypto): deal = "d-kurtka-levis", secret = 32 × 0xab.
 const DEAL = 'd-kurtka-levis';
@@ -129,5 +130,15 @@ describe('maszyna stanów', () => {
     expect(exp(exp(disp))).toMatchObject({ status: 'Completed', closeReason: 'return_ship_timeout' });
     expect(availableActions(s, 'B', T0)).toEqual(['accept', 'dispute']);
     expect(availableActions(s, 'S', s.deadlineAt!)).toEqual(['expire']);
+  });
+});
+
+describe('EscrowError', () => {
+  it('niesie kod i polski komunikat, rozpoznawalny bez instanceof', () => {
+    const e = new EscrowError('QrMismatch', 'Kod z karty nie pasuje');
+    expect([e.code, e.message, e.name]).toEqual(['QrMismatch', 'Kod z karty nie pasuje', 'EscrowError']);
+    expect(isEscrowError(e)).toBe(true);
+    expect(isEscrowError({ name: 'EscrowError', code: 'Network', message: 'x' })).toBe(true);
+    expect(isEscrowError(new Error('x'))).toBe(false);
   });
 });

@@ -804,7 +804,10 @@ async fn settle(State(s): State<AppState>, AuthUser(u): AuthUser, Path(id): Path
 // ---------- media ----------
 
 fn allowed_mime(m: &str) -> bool {
-    matches!(m, "image/jpeg" | "image/png" | "image/webp" | "image/heic" | "video/mp4" | "video/quicktime")
+    matches!(
+        m,
+        "image/jpeg" | "image/png" | "image/webp" | "image/heic" | "video/mp4" | "video/quicktime" | "application/json"
+    )
 }
 
 async fn upload_media(State(s): State<AppState>, AuthUser(u): AuthUser, req: Request) -> Res {

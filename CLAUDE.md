@@ -247,7 +247,7 @@ Wyrocznia to wąski serwis, który **zgłasza fakt**, a nie decyduje o pieniądz
 
 - Prompt jest wersjonowany w `oracle/prompts/v1.md`. Zmiana promptu oznacza nowy plik `v2.md`; nie edytuj `v1.md` w miejscu.
 - `pnpm --filter oracle fixture <dir>` uruchamia ocenę na lokalnych plikach, bez łańcucha. Używaj tego do iterowania promptu.
-- **Zmienne env** (`oracle/.env`, nigdy w gicie; wzór w `.env.example`): `GEMINI_API_KEY`, `GEMINI_MODEL`, `ORACLE_KEYPAIR` (ścieżka), `RPC_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`.
+- **Zmienne env** (`oracle/.env`, nigdy w gicie; wzór w `.env.example`): `GEMINI_API_KEY`, `GEMINI_MODEL`, `ORACLE_KEYPAIR` (ścieżka), `RPC_URL`, `SERVER_URL` (adres `server/` z `/media`).
 
 ---
 
@@ -288,9 +288,9 @@ Wygląd, teksty, stany i komponenty każdego ekranu, macierz „Co teraz?” dla
 ### Granice modułów (żeby 3 osoby nie wchodziły sobie w drogę)
 
 - **`app/src/solana/`** to jedyne miejsce, które importuje web3/anchor. Wystawia funkcje typu `purchase(deal)`, `openDispute(...)` i `fetchDeals()`.
-- **`app/src/storage/`** odpowiada za upload i pobieranie plików z Supabase.
+- **`app/src/storage/`** odpowiada za upload i pobieranie plików z `server/` (`/media`).
 - **`app/src/media/`** obsługuje kamerę, nagrywanie, wykrywanie QR i hashowanie.
-- Ekrany korzystają tylko z tych trzech modułów.
+- Ekrany korzystają tylko z tych trzech modułów oraz z interfejsu `Escrow` (`packages/shared/src/escrow.ts`): `DemoEscrow` (osoba A, REST w `PAYMENTS=demo`) i `SolanaEscrow` (osoba B, `app/src/solana/`). Aplikacja żyje w `app/` z nawigacją prototypu.
 
 ### Nagrania
 
@@ -308,16 +308,12 @@ Sprawdź, czy da się **jednocześnie nagrywać wideo i wykrywać QR**:
 
 **Nowe natywne zależności tylko po uzgodnieniu z zespołem**, bo wymagają przebudowy dev builda u wszystkich.
 
-### Storage (Supabase Storage, publiczny bucket `unbox`, bez bazy danych)
+### Storage (`server/` `/media`, bez Supabase)
 
-```
-listings/<deal>/metadata.json, listings/<deal>/photo-<n>.jpg
-deals/<deal>/packing.mp4, unboxing.mp4, complaint.json, return-packing.mp4, report.json
-```
+Pliki dowodowe (`metadata.json` z serwera, zdjęcia, `packing.mp4`, `unboxing.mp4`, `complaint.json`, `return-packing.mp4`, `report.json`) leżą w `server/` `/media`, adresowane sha256 (`POST /api/media` → `GET /media/<sha256>`). Hash z łańcucha jest adresem pliku. Supabase nie jest używany.
 
-- Pliki są niezmienne: `upsert: false`.
+- Pliki są niezmienne (adres = hash).
 - `listing_hash` to sha256 **dokładnie tych bajtów, które wysłano**. Nie serializuj JSON-a ponownie przed weryfikacją.
-- Adres PDA `deal` liczysz po stronie klienta przed `create_listing`, więc ścieżka w storage jest znana z góry.
 
 ### Etykiety statusów w UI
 
@@ -384,7 +380,7 @@ Etykiety trzymamy w `packages/shared`.
 | Aplikacja | Expo (najnowsze SDK, na start Expo Go), expo-router, TypeScript |
 | Portfel | wbudowany keypair w `expo-secure-store` (§6) |
 | Wyrocznia | Node 24 + TypeScript, `@google/genai` |
-| Pliki | Supabase Storage |
+| Pliki | `server/` `/media` (adresowane sha256) |
 
 Nie mieszaj `@coral-xyz/anchor` z `@anchor-lang/core`. Przykłady z internetu często mają stare importy.
 
@@ -407,6 +403,8 @@ Nie mieszaj `@coral-xyz/anchor` z `@anchor-lang/core`. Przykłady z internetu cz
 | 4 | App shell | `app/src/{solana,storage,media}`, `packages/shared`, root monorepo | scaffold, portfel, klient Solany, upload i hash, nawigacja, etykiety, ekrany Portfel i Szczegóły transakcji |
 | 5 | Wyrocznia | `oracle/` | Gemini, prompt, `decide()`, `resolve_dispute`, crank |
 | 6 | Pitch i demo | `README.md`, `docs/`, `scripts/` | README, slajdy, wideo 3 min, portfele demo, rekwizyty, staging demo, zgłoszenie |
+
+Od 04.10 01:30 integracja w dwie osoby, plany: `docs/superpowers/plans/2026-10-04-a-app-server.md` i `docs/superpowers/plans/2026-10-04-b-escrow-chain.md`.
 
 Zadania, kryteria akceptacji i przekazania: `docs/zadania/README.md` (przegląd) i `docs/zadania/<nr>-*.md` (jedna osoba = jeden plik).
 
@@ -481,7 +479,7 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 
 - kworum kilku niezależnych wyroczni lub modeli, uruchamianie w TEE z atestacją;
 - atestacja urządzenia (Play Integrity / App Attest, C2PA) dla nagrań;
-- Arweave/IPFS zamiast Supabase;
+- Arweave/IPFS zamiast `server/` `/media`;
 - USDC zamiast SOL;
 - kaucja za reklamację jako bariera przeciw spamowi;
 - instrukcja `close_deal` dla sprzedającego po zakończeniu lub anulowaniu, która zwraca mu depozyt rent;
@@ -496,7 +494,7 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 
 - pojedynczy klucz arbitra to rezydualne zaufanie;
 - zmodyfikowany klient może podsunąć spreparowane nagranie;
-- dostępność plików zależy od Supabase (integralność gwarantuje hash);
+- dostępność plików zależy od `server/` (integralność gwarantuje hash);
 - sprzedający nie może kwestionować zwrotu;
 - cena w SOL jest zmienna;
 - numer przesyłki nie jest weryfikowany;
@@ -525,3 +523,6 @@ Szczegółowe zadania, przekazania między osobami i godziny: `docs/zadania/`.
 - **2026-10-04** — Konto `Deal`: pola `String` przeniesione na koniec, więc `status` ma stały offset 152 (`STATUS_OFFSET`) do filtrów `memcmp`. IDL v0 w `packages/shared/idl/`; program z profilem `demo` wdrożony na devnet pod tym samym adresem.
 - **2026-10-04** — Feature `test-timeouts` (wszystkie terminy po 5 s) tylko do testów programu; zegar Surfpoola przesuwamy `surfnet_timeTravel`. Deploy zawsze przebudowuje bez tej flagi.
 - **2026-10-04** — `unbox-cli` (`cli/`) jako zapasowe demo bez telefonu: loguje się do `server/`, podpisuje kluczem z pliku osoby, która je uruchamia, i sam sprawdza hash `metadata.json` przed zakupem.
+- **2026-10-04** — Pliki dowodowe w `server/` `/media` (adres = sha256, w tym `complaint.json` i `report.json`) zamiast Supabase Storage.
+- **2026-10-04** — Szew `Escrow` (`packages/shared/src/escrow.ts`) z dwiema implementacjami: `DemoEscrow` (osoba A) i `SolanaEscrow` (osoba B).
+- **2026-10-04** — Prototyp `Front-end/sellsor-rn` przeniesiony do `app/`; jedno konto na telefon.
