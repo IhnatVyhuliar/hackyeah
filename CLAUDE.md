@@ -247,7 +247,7 @@ Wyrocznia to wąski serwis, który **zgłasza fakt**, a nie decyduje o pieniądz
 
 - Prompt jest wersjonowany w `oracle/prompts/v1.md`. Zmiana promptu oznacza nowy plik `v2.md`; nie edytuj `v1.md` w miejscu.
 - `pnpm --filter oracle fixture <dir>` uruchamia ocenę na lokalnych plikach, bez łańcucha. Używaj tego do iterowania promptu.
-- **Zmienne env** (`oracle/.env`, nigdy w gicie; wzór w `.env.example`): `GEMINI_API_KEY`, `GEMINI_MODEL`, `ORACLE_KEYPAIR` (ścieżka), `RPC_URL`, `SERVER_URL` (adres `server/` z `/media`).
+- **Zmienne env** (`oracle/.env`, nigdy w gicie; wzór w `.env.example`): `GEMINI_API_KEY`, `GEMINI_MODEL`, `ORACLE_KEYPAIR` (ścieżka), `RPC_URL`, `API_URL` (adres `server/`), `ORACLE_API_EMAIL`, `ORACLE_API_PASSWORD` (własne konto wyroczni w `server/`).
 
 ---
 
