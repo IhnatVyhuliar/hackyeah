@@ -97,6 +97,7 @@ export function createEscrowCore(d: EscrowDeps): Escrow {
       const deal = dealOf(k);
       const acc = await account(deal);
       if (!acc.arbiter.equals(d.trustedArbiter)) throw new EscrowError('ArbiterMismatch', 'Weryfikator w tej umowie jest inny niż ten, któremu ufa aplikacja. Zakup wstrzymany, nic nie zostało pobrane.');
+      if (acc.arbiter.equals(acc.seller)) throw new EscrowError('ArbiterMismatch', 'Sprzedający jest weryfikatorem własnej sprzedaży. Zakup wstrzymany, nic nie zostało pobrane.');
       const bytes = await d.fetchBytes(acc.metadataUri);
       const seen = bytes ? sha256(bytes) : null;
       if (!seen || !same(seen, acc.listingHash)) throw new EscrowError('ListingMismatch', 'Opis ogłoszenia różni się od zapisanego w umowie. Zakup wstrzymany, nic nie zostało pobrane.');
