@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use unbox_escrow::state::{Deal as ChainDeal, DealStatus as ChainStatus};
+use unbox_escrow::state::{Deal as ChainDeal, DealStatus as ChainStatus, Verdict as ChainVerdict};
 
 pub const ARBITER: &str = "4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw";
 
@@ -335,4 +335,60 @@ async fn chain_sync_endpoint_and_poller() {
     assert_eq!(status, "Paid");
     let (_, h) = m.b.anon().call(Method::GET, "/api/health", None).await;
     assert!(h["chain"]["lastSyncAt"].is_i64(), "{h}");
+}
+
+#[tokio::test]
+async fn dispute_complaint_and_oracle_report_are_mirrored_from_media() {
+    let m = market("600000").await;
+    let t = now();
+    let complaint =
+        r#"{"v":1,"category":"damaged","description":"Plama na rękawie","created_at":1791050000}"#.as_bytes().to_vec();
+    let (_, c) = m.bartek.upload_bytes(complaint, "application/json", "complaint.json").await;
+    let report = serde_json::to_vec(&json!({
+        "v": 1, "deal": m.deal.to_string(), "verdict": "BUYER", "decided_by": "decide", "model": "gemini-x", "prompt_version": "v2",
+        "buyer_recording": { "continuous": true, "starts_with_sealed_package": true, "qr_revealed_on_opening": true, "quality": "good", "notes": "" },
+        "seller_recording": { "item_clearly_visible": true, "qr_card_packed": true, "package_sealed_and_labeled": true, "quality": "good", "notes": "" },
+        "package_matches_shipping_recording": true, "item_matches_listing": true,
+        "undisclosed_damage": { "present": true, "description": "plama", "timestamps": ["00:41"] }, "reasoning": "Plama poza listą wad."
+    })).unwrap();
+    let (_, r) = m.ania.upload_bytes(report, "application/json", "report.json").await; // any account may upload
+    let to32 = |v: &Value| -> [u8; 32] { hex::decode(v["sha256"].as_str().unwrap()).unwrap().try_into().unwrap() };
+
+    let mut disputed = m.chain(ChainStatus::Disputed, t);
+    disputed.complaint_hash = to32(&c);
+    disputed.unboxing_video_hash = [7; 32];
+    m.rpc.put_deal(&m.deal, &disputed);
+    m.notify().await;
+    let (_, d) = m.bartek.call(Method::GET, "/api/deals/l-kurtka-levis", None).await;
+    assert_eq!(d["complaint"]["description"], "Plama na rękawie");
+    assert!(d["analysis"].is_null());
+
+    let mut resolved = disputed.clone();
+    resolved.status = ChainStatus::ReturnRequested;
+    resolved.status_changed_at = t + 5;
+    resolved.verdict = ChainVerdict::Buyer;
+    resolved.report_hash = to32(&r);
+    m.rpc.put_deal(&m.deal, &resolved);
+    m.notify().await;
+    let (_, d) = m.ania.call(Method::GET, "/api/deals/l-kurtka-levis", None).await;
+    let a = &d["analysis"];
+    assert_eq!(
+        (a["status"].clone(), a["verdict"].clone(), a["model"].clone()),
+        (json!("done"), json!("BUYER"), json!("gemini-x"))
+    );
+    assert_eq!(a["reportHash"], r["sha256"]);
+    assert_eq!(a["report"]["reasoning"], "Plama poza listą wad.");
+}
+
+#[tokio::test]
+async fn verdict_without_a_readable_report_still_shows_the_verdict() {
+    let m = market("600000").await;
+    let mut resolved = m.chain(ChainStatus::Completed, now());
+    resolved.verdict = ChainVerdict::Seller;
+    resolved.report_hash = [9; 32]; // file never uploaded (or decided by evidence elsewhere)
+    m.rpc.put_deal(&m.deal, &resolved);
+    m.notify().await;
+    let (_, d) = m.ania.call(Method::GET, "/api/deals/l-kurtka-levis", None).await;
+    assert_eq!((d["analysis"]["verdict"].clone(), d["analysis"]["report"].clone()), (json!("SELLER"), Value::Null));
+    assert_eq!(d["analysis"]["reportHash"], hex::encode([9u8; 32]));
 }

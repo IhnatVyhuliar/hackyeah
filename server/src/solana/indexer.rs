@@ -108,6 +108,7 @@ fn apply(
 ) -> ApiResult<()> {
     let explorer_url = signature.as_deref().zip(state.cfg.solana.as_ref()).map(|(sig, cfg)| explorer_tx_url(sig, cfg));
     let now = state.now();
+    let media_dir = state.cfg.media_dir();
     let mut conn = state.conn();
     db::tx(&mut conn, |c| {
         let mut l: Listing =
@@ -151,7 +152,8 @@ fn apply(
                     },
                 };
                 let snap = ChainSnapshot { address, deal: chain, signature, explorer_url };
-                if let Some(next) = mirror_deal(prev.as_ref(), &l, &snap, buyer, now) {
+                if let Some(mut next) = mirror_deal(prev.as_ref(), &l, &snap, buyer, now) {
+                    super::evidence::enrich(&media_dir, &mut next, chain, now);
                     db::doc_put(c, "deal", &next.id, &next)?;
                 }
             }
